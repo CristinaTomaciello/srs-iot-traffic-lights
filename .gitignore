@@ -1,0 +1,17 @@
+# Ambienti virtuali Python
+venv/
+env/
+
+# Cache e file compilati di Python
+__pycache__/
+*.pyc
+
+# File di sistema Mac/Windows
+.DS_Store
+Thumbs.db
+
+# File con variabili d'ambiente (password/segreti)
+.env
+
+# File generati da VS Code
+.vscode/
