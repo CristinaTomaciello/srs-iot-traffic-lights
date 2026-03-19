@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: semafori-mqtt-broker
+    ports:
+      - "1883:1883"  # Porta standard per le comunicazioni MQTT
+      - "9001:9001"  # Porta WebSockets 
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
