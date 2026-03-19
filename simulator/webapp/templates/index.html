@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Traffic Simulator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="map-section">
+            <h2>Mappa Incrocio</h2>
+            <div class="intersection">
+                <div class="traffic-light node-nord" id="tl-nord">
+                    <div class="light red"></div>
+                    <span class="coda-badge">Code: 0</span>
+                </div>
+                <div class="traffic-light node-ovest" id="tl-ovest">
+                    <div class="light green"></div>
+                    <span class="coda-badge">Code: 0</span>
+                </div>
+                <div class="center-box">Incrocio<br>Principale</div>
+                <div class="traffic-light node-est" id="tl-est">
+                    <div class="light green"></div>
+                    <span class="coda-badge">Code: 0</span>
+                </div>
+                <div class="traffic-light node-sud" id="tl-sud">
+                    <div class="light red"></div>
+                    <span class="coda-badge">Code: 0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h2>Scenari</h2>
+            <div class="panel">
+                <h3>Stress Test & Anomalie</h3>
+                
+                <button class="btn warning" onclick="alert('Iniettando traffico...')">Genera +50 Auto</button>
+                <button class="btn danger" onclick="alert('Simulazione Blackout...')">Blackout Nodo Sud</button>
+                <button class="btn danger" onclick="alert('Isolamento rete...')">Isola dal Controller Centrale</button>
+                <button class="btn safe" onclick="alert('Ripristino...')">Ripristina Condizioni Normali</button>
+            </div>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
