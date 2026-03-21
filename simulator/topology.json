@@ -1,0 +1,2434 @@
+{
+  "INC_0_0_NORD": {
+    "token_next": "INC_0_0_EST",
+    "is_border": true,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_0_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_0_1_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_0_EST": {
+    "token_next": "INC_0_0_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_0_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_0_SUD": {
+    "token_next": "INC_0_0_OVEST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_1_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_0_OVEST": {
+    "token_next": "INC_0_0_NORD",
+    "is_border": true,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_1_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_0_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_1_NORD": {
+    "token_next": "INC_0_1_EST",
+    "is_border": true,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_1_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_0_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_2_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_1_EST": {
+    "token_next": "INC_0_1_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_0_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_1_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_1_SUD": {
+    "token_next": "INC_0_1_OVEST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_2_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_0_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_1_OVEST": {
+    "token_next": "INC_0_1_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_2_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_1_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_2_NORD": {
+    "token_next": "INC_0_2_EST",
+    "is_border": true,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_2_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_1_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_3_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_2_EST": {
+    "token_next": "INC_0_2_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_1_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_2_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_2_SUD": {
+    "token_next": "INC_0_2_OVEST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_3_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_1_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_2_OVEST": {
+    "token_next": "INC_0_2_NORD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_3_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_2_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_3_NORD": {
+    "token_next": "INC_0_3_EST",
+    "is_border": true,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_3_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_2_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_4_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_3_EST": {
+    "token_next": "INC_0_3_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_2_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_3_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_3_SUD": {
+    "token_next": "INC_0_3_OVEST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_4_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_2_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_3_OVEST": {
+    "token_next": "INC_0_3_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_4_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_3_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_4_NORD": {
+    "token_next": "INC_0_4_EST",
+    "is_border": true,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_4_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_3_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_5_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_4_EST": {
+    "token_next": "INC_0_4_SUD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_3_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_4_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_4_SUD": {
+    "token_next": "INC_0_4_OVEST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_5_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_3_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_4_OVEST": {
+    "token_next": "INC_0_4_NORD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_5_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_4_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_5_NORD": {
+    "token_next": "INC_0_5_EST",
+    "is_border": true,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_5_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_4_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_6_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_5_EST": {
+    "token_next": "INC_0_5_SUD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_4_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_5_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_5_SUD": {
+    "token_next": "INC_0_5_OVEST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_6_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_4_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_5_OVEST": {
+    "token_next": "INC_0_5_NORD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_6_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_5_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_6_NORD": {
+    "token_next": "INC_0_6_EST",
+    "is_border": true,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_6_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_5_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_7_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_6_EST": {
+    "token_next": "INC_0_6_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_5_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_6_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_6_SUD": {
+    "token_next": "INC_0_6_OVEST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_7_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_5_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_6_OVEST": {
+    "token_next": "INC_0_6_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_7_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_6_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_7_NORD": {
+    "token_next": "INC_0_7_EST",
+    "is_border": true,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_7_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_6_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_0_7_EST": {
+    "token_next": "INC_0_7_SUD",
+    "is_border": true,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_6_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_7_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_7_SUD": {
+    "token_next": "INC_0_7_OVEST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_0_6_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_0_7_OVEST": {
+    "token_next": "INC_0_7_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_1_7_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_1_0_NORD": {
+    "token_next": "INC_1_0_EST",
+    "is_border": false,
+    "green_duration": 11,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_0_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_1_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_0_EST": {
+    "token_next": "INC_1_0_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_0_0_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_0_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_0_SUD": {
+    "token_next": "INC_1_0_OVEST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_0_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_1_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_1_0_OVEST": {
+    "token_next": "INC_1_0_NORD",
+    "is_border": true,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_1_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_0_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_0_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_1_NORD": {
+    "token_next": "INC_1_1_EST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_1_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_0_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_2_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_1_EST": {
+    "token_next": "INC_1_1_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_0_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_1_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_1_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_1_SUD": {
+    "token_next": "INC_1_1_OVEST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_1_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_2_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_0_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_1_OVEST": {
+    "token_next": "INC_1_1_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_2_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_1_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_1_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_2_NORD": {
+    "token_next": "INC_1_2_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_2_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_1_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_3_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_2_EST": {
+    "token_next": "INC_1_2_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_1_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_2_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_2_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_2_SUD": {
+    "token_next": "INC_1_2_OVEST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_2_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_3_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_1_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_2_OVEST": {
+    "token_next": "INC_1_2_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_3_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_2_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_2_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_3_NORD": {
+    "token_next": "INC_1_3_EST",
+    "is_border": false,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_3_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_2_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_4_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_3_EST": {
+    "token_next": "INC_1_3_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_2_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_3_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_3_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_3_SUD": {
+    "token_next": "INC_1_3_OVEST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_3_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_4_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_2_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_3_OVEST": {
+    "token_next": "INC_1_3_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_4_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_3_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_3_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_4_NORD": {
+    "token_next": "INC_1_4_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_4_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_3_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_5_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_4_EST": {
+    "token_next": "INC_1_4_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_3_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_4_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_4_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_4_SUD": {
+    "token_next": "INC_1_4_OVEST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_4_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_5_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_3_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_4_OVEST": {
+    "token_next": "INC_1_4_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_5_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_4_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_4_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_5_NORD": {
+    "token_next": "INC_1_5_EST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_5_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_4_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_6_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_5_EST": {
+    "token_next": "INC_1_5_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_4_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_5_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_5_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_5_SUD": {
+    "token_next": "INC_1_5_OVEST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_5_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_6_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_4_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_5_OVEST": {
+    "token_next": "INC_1_5_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_6_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_5_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_5_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_6_NORD": {
+    "token_next": "INC_1_6_EST",
+    "is_border": false,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_6_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_5_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_7_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_6_EST": {
+    "token_next": "INC_1_6_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_5_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_6_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_6_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_6_SUD": {
+    "token_next": "INC_1_6_OVEST",
+    "is_border": false,
+    "green_duration": 11,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_6_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_7_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_5_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_6_OVEST": {
+    "token_next": "INC_1_6_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_7_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_6_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_6_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_7_NORD": {
+    "token_next": "INC_1_7_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_7_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_6_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_1_7_EST": {
+    "token_next": "INC_1_7_SUD",
+    "is_border": true,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_6_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_0_7_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_7_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_7_SUD": {
+    "token_next": "INC_1_7_OVEST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_0_7_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_1_6_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_1_7_OVEST": {
+    "token_next": "INC_1_7_NORD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_2_7_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_0_7_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_0_NORD": {
+    "token_next": "INC_2_0_EST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_0_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_1_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_0_EST": {
+    "token_next": "INC_2_0_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_1_0_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_0_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_0_SUD": {
+    "token_next": "INC_2_0_OVEST",
+    "is_border": false,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_0_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_1_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_2_0_OVEST": {
+    "token_next": "INC_2_0_NORD",
+    "is_border": true,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_1_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_0_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_0_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_1_NORD": {
+    "token_next": "INC_2_1_EST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_1_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_0_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_2_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_1_EST": {
+    "token_next": "INC_2_1_SUD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_0_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_1_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_1_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_1_SUD": {
+    "token_next": "INC_2_1_OVEST",
+    "is_border": false,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_1_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_2_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_0_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_1_OVEST": {
+    "token_next": "INC_2_1_NORD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_2_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_1_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_1_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_2_NORD": {
+    "token_next": "INC_2_2_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_2_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_1_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_3_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_2_EST": {
+    "token_next": "INC_2_2_SUD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_1_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_2_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_2_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_2_SUD": {
+    "token_next": "INC_2_2_OVEST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_2_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_3_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_1_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_2_OVEST": {
+    "token_next": "INC_2_2_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_3_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_2_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_2_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_3_NORD": {
+    "token_next": "INC_2_3_EST",
+    "is_border": false,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_3_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_2_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_4_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_3_EST": {
+    "token_next": "INC_2_3_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_2_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_3_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_3_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_3_SUD": {
+    "token_next": "INC_2_3_OVEST",
+    "is_border": false,
+    "green_duration": 11,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_3_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_4_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_2_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_3_OVEST": {
+    "token_next": "INC_2_3_NORD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_4_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_3_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_3_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_4_NORD": {
+    "token_next": "INC_2_4_EST",
+    "is_border": false,
+    "green_duration": 11,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_4_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_3_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_5_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_4_EST": {
+    "token_next": "INC_2_4_SUD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_3_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_4_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_4_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_4_SUD": {
+    "token_next": "INC_2_4_OVEST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_4_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_5_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_3_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_4_OVEST": {
+    "token_next": "INC_2_4_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_5_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_4_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_4_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_5_NORD": {
+    "token_next": "INC_2_5_EST",
+    "is_border": false,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_5_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_4_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_6_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_5_EST": {
+    "token_next": "INC_2_5_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_4_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_5_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_5_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_5_SUD": {
+    "token_next": "INC_2_5_OVEST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_5_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_6_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_4_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_5_OVEST": {
+    "token_next": "INC_2_5_NORD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_6_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_5_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_5_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_6_NORD": {
+    "token_next": "INC_2_6_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_6_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_5_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_7_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_6_EST": {
+    "token_next": "INC_2_6_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_5_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_6_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_6_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_6_SUD": {
+    "token_next": "INC_2_6_OVEST",
+    "is_border": false,
+    "green_duration": 11,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_6_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_7_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_2_5_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_6_OVEST": {
+    "token_next": "INC_2_6_NORD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_7_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_6_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_6_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_7_NORD": {
+    "token_next": "INC_2_7_EST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_7_NORD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_6_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_2_7_EST": {
+    "token_next": "INC_2_7_SUD",
+    "is_border": true,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_6_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_1_7_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_7_NORD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_7_SUD": {
+    "token_next": "INC_2_7_OVEST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_1_7_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_6_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_2_7_OVEST": {
+    "token_next": "INC_2_7_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_7_NORD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_1_7_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_0_NORD": {
+    "token_next": "INC_3_0_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_3_1_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_0_EST": {
+    "token_next": "INC_3_0_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_2_0_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_0_SUD": {
+    "token_next": "INC_3_0_OVEST",
+    "is_border": true,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_0_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_1_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_0_OVEST": {
+    "token_next": "INC_3_0_NORD",
+    "is_border": true,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_1_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_0_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_1_NORD": {
+    "token_next": "INC_3_1_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_0_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_2_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_1_EST": {
+    "token_next": "INC_3_1_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_0_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_1_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_1_SUD": {
+    "token_next": "INC_3_1_OVEST",
+    "is_border": true,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_1_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_2_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_0_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_1_OVEST": {
+    "token_next": "INC_3_1_NORD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_2_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_1_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_2_NORD": {
+    "token_next": "INC_3_2_EST",
+    "is_border": false,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_1_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_3_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_2_EST": {
+    "token_next": "INC_3_2_SUD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_1_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_2_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_2_SUD": {
+    "token_next": "INC_3_2_OVEST",
+    "is_border": true,
+    "green_duration": 13,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_2_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_3_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_1_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_2_OVEST": {
+    "token_next": "INC_3_2_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_3_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_2_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_3_NORD": {
+    "token_next": "INC_3_3_EST",
+    "is_border": false,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_2_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_4_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_3_EST": {
+    "token_next": "INC_3_3_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_2_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_3_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_3_SUD": {
+    "token_next": "INC_3_3_OVEST",
+    "is_border": true,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_3_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_4_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_2_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_3_OVEST": {
+    "token_next": "INC_3_3_NORD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_4_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_3_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_4_NORD": {
+    "token_next": "INC_3_4_EST",
+    "is_border": false,
+    "green_duration": 11,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_3_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_5_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_4_EST": {
+    "token_next": "INC_3_4_SUD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_3_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_4_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_4_SUD": {
+    "token_next": "INC_3_4_OVEST",
+    "is_border": true,
+    "green_duration": 10,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_4_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_5_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_3_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_4_OVEST": {
+    "token_next": "INC_3_4_NORD",
+    "is_border": false,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_5_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_4_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_5_NORD": {
+    "token_next": "INC_3_5_EST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_4_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_6_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_5_EST": {
+    "token_next": "INC_3_5_SUD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_4_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_5_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_5_SUD": {
+    "token_next": "INC_3_5_OVEST",
+    "is_border": true,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_5_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_6_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_4_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_5_OVEST": {
+    "token_next": "INC_3_5_NORD",
+    "is_border": false,
+    "green_duration": 5,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_6_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_5_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_6_NORD": {
+    "token_next": "INC_3_6_EST",
+    "is_border": false,
+    "green_duration": 15,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_5_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_7_OVEST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_6_EST": {
+    "token_next": "INC_3_6_SUD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_5_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_6_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_6_SUD": {
+    "token_next": "INC_3_6_OVEST",
+    "is_border": true,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_6_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_3_7_OVEST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "INC_3_5_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_6_OVEST": {
+    "token_next": "INC_3_6_NORD",
+    "is_border": false,
+    "green_duration": 7,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_7_OVEST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_6_SUD",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_7_NORD": {
+    "token_next": "INC_3_7_EST",
+    "is_border": false,
+    "green_duration": 12,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "INC_3_6_EST",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_7_EST": {
+    "token_next": "INC_3_7_SUD",
+    "is_border": true,
+    "green_duration": 6,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_3_6_EST",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "INC_2_7_SUD",
+        "tempo_transito": 4
+      },
+      "sinistra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      }
+    }
+  },
+  "INC_3_7_SUD": {
+    "token_next": "INC_3_7_OVEST",
+    "is_border": true,
+    "green_duration": 14,
+    "strade_uscita": {
+      "dritto": {
+        "target": "INC_2_7_SUD",
+        "tempo_transito": 6
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_3_6_EST",
+        "tempo_transito": 5
+      }
+    }
+  },
+  "INC_3_7_OVEST": {
+    "token_next": "INC_3_7_NORD",
+    "is_border": false,
+    "green_duration": 4,
+    "strade_uscita": {
+      "dritto": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "destra": {
+        "target": "OUT",
+        "tempo_transito": 2
+      },
+      "sinistra": {
+        "target": "INC_2_7_SUD",
+        "tempo_transito": 5
+      }
+    }
+  }
+}

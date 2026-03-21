@@ -3,46 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Traffic Simulator</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>SRS Traffic Control</title>
+    <style>
+        :root {
+            --grass: #2ecc71;
+            --asphalt: #2f3640;
+        }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #1e272e; 
+            color: white; 
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* Blocca lo scroll */
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            text-align: center;
+            padding: 15px 0;
+            flex-shrink: 0;
+        }
+        h1 { font-weight: 300; letter-spacing: 2px; margin: 0 0 5px 0; font-size: 24px; }
+        p { color: #aaa; margin: 0; font-size: 14px; }
+        
+        /* Contenitore dinamico per l'auto-scaling */
+        #main-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        #map-wrapper {
+            position: relative;
+            background: var(--grass); /* Il prato di fondo */
+            padding: 60px; /* Margine esterno dal bordo città */
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        #road-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1; /* Sopra il prato, Sotto gli incroci */
+            pointer-events: none;
+        }
+
+        #city-map {
+            position: relative;
+            z-index: 2; /* Gli incroci stanno sopra l'asfalto */
+            display: grid;
+            gap: 120px; /* Lunghezza delle strade tra gli incroci */
+        }
+
+        .intersection {
+            width: 110px;
+            height: 110px;
+            background: var(--asphalt);
+            border-radius: 8px;
+            display: grid;
+            /* Creiamo una "gabbia" rigida per le celle, per impedire ai semafori di uscire */
+            grid-template-columns: 32px 46px 32px;
+            grid-template-rows: 32px 46px 32px;
+            grid-template-areas:
+                ". nord ."
+                "ovest centro est"
+                ". sud .";
+            position: relative;
+        }
+
+        .traffic-light {
+            background: #111;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #000;
+            width: 24px;   /* Forziamo dimensioni precise */
+            height: 36px;
+            margin: auto;  /* Li centra perfettamente al centro della propria cella */
+            gap: 2px;
+        }
+
+        .light-bulb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #444;
+            transition: all 0.2s ease;
+        }
+
+        .coda-badge {
+            font-size: 9px;
+            background: #f1f2f6;
+            color: #2f3640;
+            padding: 1px 3px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        /* Centro dell'incrocio vuoto (asfalto) */
+        .intersection::after {
+            content: '';
+            grid-area: centro;
+            background: transparent;
+        }
+
+        /* Etichetta ID Incrocio */
+        .intersection-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            opacity: 0.5;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .tl-nord { grid-area: nord; }
+        .tl-sud { grid-area: sud; }
+        .tl-est { grid-area: est; }
+        .tl-ovest { grid-area: ovest; }
+
+        
+
+        
+        
+        .light-bulb.red { background: #ff4757; box-shadow: 0 0 10px #ff4757; }
+        .light-bulb.yellow { background: #ffa502; box-shadow: 0 0 10px #ffa502; }
+        .light-bulb.green { background: #2ed573; box-shadow: 0 0 10px #2ed573; }
+
+        
+
+        /* =========================================
+           UI PANNELLO ADMIN A SCOMPARSA
+           ========================================= */
+        #admin-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #3742fa;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 1000;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: 0.2s;
+        }
+        #admin-toggle:hover {
+            background: #5352ed;
+        }
+
+        #admin-panel {
+            position: fixed;
+            top: 0;
+            right: -350px; /* Nascosto di default */
+            width: 320px;
+            height: 100vh;
+            background: #151b20;
+            border-left: 2px solid #333;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.8);
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1001;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #admin-panel.open {
+            right: 0; /* Mostra il pannello */
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+        .admin-header h2 { margin: 0; font-size: 20px; color: #fff; }
+        .admin-header button {
+            background: none; border: none; color: #ff4757; cursor: pointer; font-size: 24px; font-weight: bold;
+        }
+        .admin-header button:hover { color: #ff6b81; }
+
+        .admin-section {
+            background: #1e272e;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .admin-section h3 { margin-top: 0; font-size: 14px; color: #aaa; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;}
+        
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 6px;
+            color: white; font-weight: bold; cursor: pointer; margin-bottom: 10px;
+            transition: 0.2s; font-size: 14px;
+        }
+        .btn-start { background: #2ed573; color: #000; }
+        .btn-start:hover { background: #26b360; }
+        .btn-pause { background: #ff4757; }
+        .btn-pause:hover { background: #d63031; }
+        .btn-inject { background: #3742fa; }
+        .btn-inject:hover { background: #5352ed; }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 12px; color: #aaa; margin-bottom: 5px; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 10px; background: #2f3640; border: 1px solid #555;
+            color: white; border-radius: 4px; box-sizing: border-box; font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #3742fa; }
+
+    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="map-section">
-            <h2>Mappa Incrocio</h2>
-            <div class="intersection">
-                <div class="traffic-light node-nord" id="tl-nord">
-                    <div class="light red"></div>
-                    <span class="coda-badge">Code: 0</span>
-                </div>
-                <div class="traffic-light node-ovest" id="tl-ovest">
-                    <div class="light green"></div>
-                    <span class="coda-badge">Code: 0</span>
-                </div>
-                <div class="center-box">Incrocio<br>Principale</div>
-                <div class="traffic-light node-est" id="tl-est">
-                    <div class="light green"></div>
-                    <span class="coda-badge">Code: 0</span>
-                </div>
-                <div class="traffic-light node-sud" id="tl-sud">
-                    <div class="light red"></div>
-                    <span class="coda-badge">Code: 0</span>
-                </div>
-            </div>
+    <header>
+        <h1>SRS Traffic Control Centre</h1>
+    </header>
+
+    <button id="admin-toggle" onclick="document.getElementById('admin-panel').classList.add('open')">
+        Control Room
+    </button>
+
+    <div id="admin-panel">
+        <div class="admin-header">
+            <h2>Control Room</h2>
+            <button onclick="document.getElementById('admin-panel').classList.remove('open')">×</button>
+        </div>
+        
+        <div class="admin-section">
+            <h3>Controllo Globale</h3>
+            <button class="btn btn-start" onclick="sendCommand('START')">AVVIA SIMULAZIONE</button>
+            <button class="btn btn-pause" onclick="sendCommand('PAUSE')">METTI IN PAUSA</button>
         </div>
 
-        <div class="control-section">
-            <h2>Scenari</h2>
-            <div class="panel">
-                <h3>Stress Test & Anomalie</h3>
-                
-                <button class="btn warning" onclick="alert('Iniettando traffico...')">Genera +50 Auto</button>
-                <button class="btn danger" onclick="alert('Simulazione Blackout...')">Blackout Nodo Sud</button>
-                <button class="btn danger" onclick="alert('Isolamento rete...')">Isola dal Controller Centrale</button>
-                <button class="btn safe" onclick="alert('Ripristino...')">Ripristina Condizioni Normali</button>
+        <div class="admin-section">
+            <h3>Iniezione Traffico</h3>
+            <div class="form-group">
+                <label>ID Incrocio (es. INC_0_0)</label>
+                <input type="text" id="inj-incrocio" placeholder="INC_0_0" value="INC_0_0">
             </div>
+            <div class="form-group">
+                <label>Direzione Origine</label>
+                <select id="inj-direzione">
+                    <option value="NORD">NORD (Sopra)</option>
+                    <option value="SUD">SUD (Sotto)</option>
+                    <option value="EST">EST (Destra)</option>
+                    <option value="OVEST">OVEST (Sinistra)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Numero Auto</label>
+                <input type="number" id="inj-count" min="1" max="50" value="5">
+            </div>
+            <button class="btn btn-inject" onclick="injectCars()">INIETTA AUTO</button>
         </div>
     </div>
+    
+    <div id="main-container">
+        <div id="map-wrapper">
+            <canvas id="road-canvas"></canvas>
+            <div id="city-map"></div>
+        </div>
+    </div>
+
     <script src="/static/script.js"></script>
 </body>
 </html>
