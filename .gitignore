@@ -15,3 +15,9 @@ Thumbs.db
 
 # File generati da VS Code
 .vscode/
+
+# Dati e Log dei Container Docker
+mosquitto/data/
+mosquitto/log/
+influxdb/data/
+influxdb/config/
