@@ -36,10 +36,11 @@ def on_message(client, userdata, msg):
         
         # Creazione del punto storico da salvare in InfluxDB
         punto_storico = influxdb_client.Point("stato_traffico") \
-            .tag("incrocio", incrocio_id) \
-            .tag("direzione", semaforo_id) \
-            .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
-            .field("colore", dati_semaforo.get('colore', 'UNKNOWN'))
+        .tag("incrocio", incrocio_id) \
+        .tag("direzione", semaforo_id) \
+        .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
+        .field("colore", dati_semaforo.get('colore', 'UNKNOWN')) \
+        .field("durata_verde", int(dati_semaforo.get('green_duration', 0))) # Aggiungi questo
         
         # Scrive fisicamente nel database
         write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=punto_storico)

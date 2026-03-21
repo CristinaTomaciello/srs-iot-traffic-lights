@@ -13,7 +13,6 @@ services:
       - ./mosquitto/log:/mosquitto/log
     restart: unless-stopped
 
-  # --- NUOVO DATABASE TIME-SERIES ---
   influxdb:
     image: influxdb:2.7
     container_name: semafori-tsdb

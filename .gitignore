@@ -21,3 +21,6 @@ mosquitto/data/
 mosquitto/log/
 influxdb/data/
 influxdb/config/
+
+# Log creati dal simulatore
+simulator/simulator.log
