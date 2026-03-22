@@ -1,10 +1,11 @@
 import paho.mqtt.client as mqtt
 import json
 import influxdb_client
+import time
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 # CONFIGURAZIONE INFLUXDB
-INFLUX_URL = "http://localhost:8086"
+INFLUX_URL = "http://influxdb:8086"
 INFLUX_TOKEN = "supersecrettoken123"
 INFLUX_ORG = "srs_org"
 INFLUX_BUCKET = "traffic_data"
@@ -19,7 +20,6 @@ global_state = {}
 def on_connect(client, userdata, flags, reason_code, properties):
     print("Central Controller online")
     client.subscribe("srs/edge/+/+/stato")
-    print("In ascolto degli stati dei semafori e salvataggio storico in corso")
 
 def on_message(client, userdata, msg):
     try:
@@ -36,15 +36,14 @@ def on_message(client, userdata, msg):
         
         # Creazione del punto storico da salvare in InfluxDB
         punto_storico = influxdb_client.Point("stato_traffico") \
-            .tag("incrocio", incrocio_id) \
-            .tag("direzione", semaforo_id) \
-            .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
-            .field("colore", dati_semaforo.get('colore', 'UNKNOWN'))
+        .tag("incrocio", incrocio_id) \
+        .tag("direzione", semaforo_id) \
+        .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
+        .field("colore", dati_semaforo.get('colore', 'UNKNOWN')) \
+        .field("durata_verde", int(dati_semaforo.get('green_duration', 0)))
         
         # Scrive fisicamente nel database
         write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=punto_storico)
-        
-        print(f"STORICO SALVATO: {incrocio_id}/{semaforo_id} -> {dati_semaforo.get('auto_in_coda')} auto")
         
     except json.JSONDecodeError:
         print(f"Errore di decodifica JSON dal topic {msg.topic}")
@@ -57,7 +56,15 @@ client.on_connect = on_connect
 client.on_message = on_message
 
 print("Connessione al broker MQTT in corso")
-client.connect("localhost", 1883, 60)
+connected = False
+while not connected:
+    try:
+        client.connect("mqtt-broker", 1883, 60)
+        connected = True
+        print("Controller connesso al Broker MQTT")
+    except Exception as e:
+        print(f"In attesa del Broker MQTT ({e})")
+        time.sleep(2)
 
 # Avviamo il loop in un thread separato per gestire le comunicazioni MQTT senza bloccare il programma principale
 client.loop_start()

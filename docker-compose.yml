@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mqtt-broker:
     image: eclipse-mosquitto:latest
@@ -10,25 +8,48 @@ services:
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
     restart: unless-stopped
 
-  # --- NUOVO DATABASE TIME-SERIES ---
   influxdb:
     image: influxdb:2.7
     container_name: semafori-tsdb
     ports:
-      - "8086:8086" # Porta standard di InfluxDB
-    volumes:
-      - ./influxdb/data:/var/lib/influxdb2
-      - ./influxdb/config:/etc/influxdb2
+      - "8086:8086"
     environment:
-      # Configurazioni di base automatiche per InfluxDB 2.x
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
       - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
-      - DOCKER_INFLUXDB_INIT_RETENTION=14d 
+    restart: unless-stopped
+
+  srs-ui:
+    build:
+      context: .
+      dockerfile: simulator/webapp/Dockerfile.ui
+    container_name: srs_ui
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mqtt-broker
+    restart: unless-stopped
+
+  srs-simulator:
+    build:
+      context: .
+      dockerfile: simulator/Dockerfile.nodo
+    container_name: srs_nodes_simulator
+    depends_on:
+      - mqtt-broker
+    restart: unless-stopped
+
+  srs-controller:
+    build:
+      context: .
+      dockerfile: controller/Dockerfile.controller
+    container_name: srs_main_controller
+    depends_on:
+      - influxdb
+      - mqtt-broker
     restart: unless-stopped
