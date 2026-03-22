@@ -26,6 +26,7 @@ class NodoSemaforo:
         
         self.sim_active = False 
         self.token_iniziato = False
+        self.is_hardware_fault = False
         
         self.coda_auto = []
         self.auto_in_arrivo = []
@@ -39,14 +40,12 @@ class NodoSemaforo:
             self.config_nodo = mappa_completa.get(self.id, {})
             self.strade_uscita = self.config_nodo.get("strade_uscita", {})
             self.is_border = self.config_nodo.get("is_border", False)
-            # DNA di base del nodo
             self.base_green_duration = self.config_nodo.get("green_duration", 5)
         else:
             self.config_nodo = {}
             self.strade_uscita = {}
             self.base_green_duration = 5
 
-        # Variabili dinamiche per l'override dell'MCP
         self.current_green_duration = self.base_green_duration
         self.override_cycles_left = 0
 
@@ -60,9 +59,10 @@ class NodoSemaforo:
         
         self.topic_admin_ctrl = "srs/admin/control"
         self.topic_admin_inject = f"srs/admin/inject/{self.incrocio_id}"
-        
-        # NUOVO: Canale di configurazione privato per l'MCP
         self.topic_config = f"srs/edge/{self.id}/config"
+        
+        # Topic dedicato per la ricezione delle iniezioni di guasto
+        self.topic_fault = f"srs/admin/node/{self.id}/fault_injection" 
 
     def on_connect(self, client, userdata, flags, rc, properties):
         self.connesso = True
@@ -70,7 +70,8 @@ class NodoSemaforo:
         self.client.subscribe(self.topic_fase)
         self.client.subscribe(self.topic_admin_ctrl)
         self.client.subscribe(self.topic_admin_inject)
-        self.client.subscribe(self.topic_config) # Iscrizione al canale MCP
+        self.client.subscribe(self.topic_config)
+        self.client.subscribe(self.topic_fault)
 
     def on_message(self, client, userdata, msg):
         try:
@@ -80,6 +81,9 @@ class NodoSemaforo:
                 self.auto_in_arrivo.append(payload)
                 
             elif msg.topic == self.topic_fase:
+                if self.is_hardware_fault:
+                    return
+
                 nuova_fase = payload.get("asse")
                 
                 if nuova_fase == self.asse:
@@ -103,7 +107,7 @@ class NodoSemaforo:
                     self.sim_active = False
                     
             elif msg.topic == self.topic_admin_inject:
-                if payload.get("direzione") == self.direzione_assoluta:
+                if payload.get("direzione") == self.direzione_assoluta and not self.is_hardware_fault:
                     num_auto = payload.get("count", 1)
                     for _ in range(num_auto):
                         target_r, target_c = random.randint(0, 3), random.randint(0, 7)
@@ -115,20 +119,36 @@ class NodoSemaforo:
                         self.coda_auto.append(nuova_auto)
                         print(f"[{self.id}]: Iniezione Admin: Auto {nuova_auto['id']} aggiunta.")
             
-            # NUOVO: Gestione dei comandi MCP per l'override temporaneo
             elif msg.topic == self.topic_config:
                 if "green_duration" in payload:
                     nuova_durata = int(payload["green_duration"])
-                    cicli = int(payload.get("override_cycles", 1)) # Default 1 ciclo se non specificato
+                    cicli = int(payload.get("override_cycles", 1))
                     
                     self.current_green_duration = nuova_durata
                     self.override_cycles_left = cicli
-                    print(f"[{self.id}]: 🛠️ MCP OVERRIDE -> Verde a {nuova_durata}s per {cicli} cicli.")
-                        
+                    print(f"[{self.id}]: MCP OVERRIDE Verde a {nuova_durata}s per {cicli} cicli.")
+
+            elif msg.topic == self.topic_fault:
+                fault_type = payload.get("type")
+                if fault_type == "SOFTWARE_CRASH":
+                    print(f"[{self.id}] Simulazione CRASH SOFTWARE.")
+                    os._exit(1) # Terminazione brutale del processo
+                elif fault_type == "HARDWARE_FAILURE":
+                    print(f"[{self.id}] Simulazione GUASTO HARDWARE.")
+                    self.is_hardware_fault = True
+                    self.stato = "OFFLINE"
+                    self.ha_il_token = False
+                elif fault_type == "REPAIR":
+                    print(f"[{self.id}] Riparazione HARDWARE completata.")
+                    self.is_hardware_fault = False
+                    self.stato = "ROSSO"
+                    
         except Exception as e:
             pass
 
     def passa_token(self):
+        if self.is_hardware_fault:
+            return
         self.ha_il_token = False 
         self.client.publish(self.topic_fase, json.dumps({"asse": f"GIALLO_{self.asse}"}))
         
@@ -142,25 +162,22 @@ class NodoSemaforo:
         threading.Thread(target=delayed_sequence, daemon=True).start()
 
     def logica_autonoma(self):
-        if not self.sim_active or not self.ha_il_token or self.stato == "GIALLO":
+        if not self.sim_active or not self.ha_il_token or self.stato == "GIALLO" or self.is_hardware_fault:
             return
 
         self.tick_count += 1
         
-        # Il master decide quando finisce il verde basandosi sul tempo corrente
         if self.is_master and self.tick_count >= self.current_green_duration:
-            
-            # Gestione del Lease/Contratto MCP a fine ciclo
             if self.override_cycles_left > 0:
                 self.override_cycles_left -= 1
                 if self.override_cycles_left == 0:
-                    print(f"[{self.id}]: 🔄 Contratto MCP scaduto. Ritorno al tempo base di {self.base_green_duration}s.")
+                    print(f"[{self.id}]: MCP scaduto. Ritorno al tempo base di {self.base_green_duration}s.")
                     self.current_green_duration = self.base_green_duration
             
             self.passa_token()
 
     def aggiorna_traffico(self):
-        if not self.sim_active:
+        if not self.sim_active or self.is_hardware_fault:
             return
 
         intensita = 0.4 if (int(time.time()) % 60) < 20 else 0.1
@@ -242,7 +259,16 @@ class NodoSemaforo:
                     self.client.publish(topic_target, json.dumps(auto))
 
     def run(self):
-        self.client.connect("localhost", 1883, 60)
+        payload_morte = json.dumps({
+            "colore": "OFFLINE", 
+            "auto_in_coda": len(self.coda_auto),
+            "green_duration": 0
+        })
+        
+        # Impostiamo il testamento sul topic di stato del nodo
+        self.client.will_set(self.topic_stato, payload_morte, qos=1, retain=False)
+        
+        self.client.connect("mqtt-broker", 1883, 60)
         self.client.loop_start()
 
         while True:
@@ -251,7 +277,8 @@ class NodoSemaforo:
             
             payload = {
                 "colore": self.stato, 
-                "auto_in_coda": len(self.coda_auto)
+                "auto_in_coda": len(self.coda_auto),
+                "green_duration": self.current_green_duration
             }
             self.client.publish(self.topic_stato, json.dumps(payload))
             time.sleep(1)

@@ -3,24 +3,41 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
 import uvicorn
 import asyncio
 import paho.mqtt.client as mqtt
 import json
 import os
 
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = FastAPI(title="Semafori UI - MQTT Bridge")
-
-# Costruiamo i percorsi assoluti
+# Percorsi assoluti
 static_path = os.path.join(BASE_DIR, "static")
 templates_path = os.path.join(BASE_DIR, "templates")
+topo_path = "/app/topology.json" 
 
-# Montiamo le cartelle usando i percorsi sicuri
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates = Jinja2Templates(directory=templates_path)
 
+# Caricamento topologia
+try:
+    with open(topo_path, 'r') as f:
+        topology = json.load(f)
+    print(f"Topologia caricata correttamente da {topo_path}")
+except Exception as e:
+    print(f"ERRORE CRITICO: Impossibile caricare {topo_path}: {e}")
+    topology = {}
 connessioni_attive = []
 
 # MQTT Callbacks
@@ -54,7 +71,7 @@ mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
 
-# --- MODELLI DATI PER IL PANNELLO ADMIN ---
+#Pannello di controllo admin
 class ControlCommand(BaseModel):
     command: str
 
@@ -62,7 +79,6 @@ class InjectCommand(BaseModel):
     incrocio: str
     direzione: str
     count: int
-# ------------------------------------------
 
 # Endpoint base
 @app.get("/", response_class=HTMLResponse)
@@ -80,7 +96,7 @@ async def get_topology():
         print("topology.json non trovato dalla UI")
         return {}
 
-# --- NUOVI ENDPOINT ADMIN ---
+# Endpoint per i comandi admin
 @app.post("/api/admin/control")
 async def admin_control(cmd: ControlCommand):
     # Pubblica il comando globale su MQTT (START / PAUSE)
@@ -94,7 +110,7 @@ async def admin_inject(inj: InjectCommand):
     payload = {"direzione": inj.direzione, "count": inj.count}
     mqtt_client.publish(topic, json.dumps(payload))
     return {"status": "ok"}
-# ----------------------------
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -110,7 +126,7 @@ async def websocket_endpoint(websocket: WebSocket):
 async def startup_event():
     global loop
     loop = asyncio.get_event_loop()
-    mqtt_client.connect("localhost", 1883, 60)
+    mqtt_client.connect("mqtt-broker", 1883, 60)
     mqtt_client.loop_start()
 
 @app.on_event("shutdown")
@@ -119,4 +135,5 @@ async def shutdown_event():
     mqtt_client.disconnect()
 
 if __name__ == "__main__":
-    uvicorn.run("server_ui:app", host="0.0.0.0", port=8080, reload=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

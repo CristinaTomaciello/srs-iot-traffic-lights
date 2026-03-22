@@ -1,0 +1,17 @@
+FROM python:3.10-slim
+WORKDIR /app
+
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+
+COPY simulator/webapp/static/ ./static/
+COPY simulator/webapp/templates/ ./templates/
+COPY simulator/webapp/server_ui.py .
+COPY simulator/topology.json /topology.json
+COPY simulator/topology.json ./topology.json
+
+EXPOSE 8080
+
+CMD ["python", "-u", "server_ui.py"]

@@ -23,14 +23,13 @@ for r in range(ROWS):
             if dir_in == "OVEST" and c == 0: is_border = True
             if dir_in == "EST" and c == COLS - 1: is_border = True
 
-            # --- NUOVA LOGICA: Assegnazione green_duration dinamico ---
+            # Assegna un tempo di verde dinamico basato sulla posizione del semaforo
             if dir_in in ["NORD", "SUD"]:
                 green_duration = random.randint(10, 15) # Arterie principali
             else:
                 green_duration = random.randint(4, 7)   # Strade secondarie
-            # ----------------------------------------------------------
 
-            # Calcolo delle rotte con vie di fuga ("OUT") se si tocca il bordo
+            # Calcolo delle rotte con vie di fuga se si tocca il bordo
             if dir_in == "NORD":
                 strade_uscita["dritto"] = {"target": f"INC_{r+1}_{c}_NORD", "tempo_transito": 6} if r + 1 < ROWS else {"target": "OUT", "tempo_transito": 2}
                 strade_uscita["destra"] = {"target": f"INC_{r}_{c-1}_EST", "tempo_transito": 4} if c - 1 >= 0 else {"target": "OUT", "tempo_transito": 2}
@@ -66,5 +65,4 @@ topo_path = os.path.join(base_dir, '../topology.json')
 with open(topo_path, "w") as f:
     json.dump(topology, f, indent=2)
 
-print(f"Mappa 4x8 generata con successo in {topo_path}")
-print("I tempi di verde (green_duration) sono stati assegnati dinamicamente.")
+print(f"Topologia generata con successo e salvata")

@@ -146,15 +146,15 @@ ws.onmessage = function(event) {
             light.className = "light-bulb green";
         } else if (data.stato.includes("GIALLO")) {
             light.className = "light-bulb yellow";
+        } else if (data.stato === "OFFLINE") {
+            light.className = "light-bulb offline"; // <--- NUOVA RIGA
         }
 
         semaforoDiv.querySelector(".coda-badge").innerText = data.coda;
     }
 };
 
-/* =========================================
-   FUNZIONI ADMIN CONTROL ROOM
-   ========================================= */
+"Funzioni per i comandi di controllo e iniezione auto"
 
 function sendCommand(cmd) {
     fetch('/api/admin/control', {
@@ -190,7 +190,7 @@ function injectCars() {
             // Opzionale: piccolo feedback visivo sul pulsante
             const btn = document.querySelector('.btn-inject');
             const oldText = btn.innerText;
-            btn.innerText = "✅ FATTO!";
+            btn.innerText = "FATTO";
             btn.style.background = "#2ed573";
             setTimeout(() => {
                 btn.innerText = oldText;
