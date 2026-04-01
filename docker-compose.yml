@@ -22,6 +22,10 @@ services:
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
+      - DOCKER_INFLUXDB_INIT_RETENTION=1d
+    volumes:
+      - ./influxdb_data:/var/lib/influxdb2
+      - ./dashboards:/docker-entrypoint-initdb.d
     restart: unless-stopped
 
   srs-ui:
