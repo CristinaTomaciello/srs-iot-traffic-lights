@@ -22,5 +22,8 @@ mosquitto/log/
 influxdb/data/
 influxdb/config/
 
+# Ignora i dati locali del database
+influxdb_data/
+
 # Log creati dal simulatore
 simulator/simulator.log
