@@ -2,7 +2,12 @@ import paho.mqtt.client as mqtt
 import json
 import influxdb_client
 import time
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.client.write_api import ASYNCHRONOUS
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+import simulator.utility.mqtt_utils as utils
 
 # CONFIGURAZIONE INFLUXDB
 INFLUX_URL = "http://influxdb:8086"
@@ -12,14 +17,17 @@ INFLUX_BUCKET = "traffic_data"
 
 # Connettiamo al database InfluxDB e prepariamo l'API di scrittura
 db_client = influxdb_client.InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-write_api = db_client.write_api(write_options=SYNCHRONOUS)
+write_api = db_client.write_api(write_options=ASYNCHRONOUS)
 
-
+is_mqtt_connected = False
 global_state = {}
 
-def on_connect(client, userdata, flags, reason_code, properties):
-    print("Central Controller online")
-    client.subscribe("srs/edge/+/+/stato")
+def on_connect(client, userdata, flags, rc, properties):
+    global is_mqtt_connected
+    if rc == 0:
+        is_mqtt_connected = True
+        print("[CONTROLLER_CLIENT] Central Controller online e connesso!", flush=True)
+        client.subscribe("srs/edge/+/+/stato")
 
 def on_message(client, userdata, msg):
     try:
@@ -50,28 +58,40 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f"Errore salvataggio DB: {e}")
 
+def on_disconnect(client, userdata, flags, rc, properties):
+    global is_mqtt_connected
+    is_mqtt_connected = False
+    print("[CONTROLLER_CLIENT] Disconnesso dal broker!", flush=True)
+
+def check_controller_connection():
+    global is_mqtt_connected
+    return is_mqtt_connected
+
 # Avvio del Sistema
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="CONTROLLER_CLIENT")
 client.on_connect = on_connect
 client.on_message = on_message
+# FIX FONDAMENTALE: Assegnazione dell'evento di disconnessione per attivare il failover
+client.on_disconnect = on_disconnect 
 
-print("Connessione al broker MQTT in corso")
-connected = False
-while not connected:
-    try:
-        client.connect("mqtt-broker", 1883, 60)
-        connected = True
-        print("Controller connesso al Broker MQTT")
-    except Exception as e:
-        print(f"In attesa del Broker MQTT ({e})")
-        time.sleep(2)
+print("Inizializzazione del Controller e connessione in HA...", flush=True)
 
-# Avviamo il loop in un thread separato per gestire le comunicazioni MQTT senza bloccare il programma principale
-client.loop_start()
+# --- CONNESSIONE INIZIALE MODULARE ---
+# Deleghiamo la gestione dei socket e della rotazione al nostro modulo condiviso
+utils.connetti_con_failover(client, "CONTROLLER_CLIENT", check_controller_connection)
 
+# --- CICLO PRINCIPALE CON MONITORAGGIO FAILOVER ---
 try:
     while True:
-        pass
+        # Il cuore dell'Alta Affidabilità per il Controller:
+        # Se cade HAProxy-1, il ciclo se ne accorge e cerca HAProxy-2 in automatico.
+        if not check_controller_connection():
+            print("[CONTROLLER_CLIENT] Connessione persa! Rotazione verso il bilanciatore secondario in corso...", flush=True)
+            utils.connetti_con_failover(client, "CONTROLLER_CLIENT", check_controller_connection)
+            
+        # Lascia respirare la CPU (essenziale per non soffocare InfluxDB o Docker)
+        time.sleep(1)
+        
 except KeyboardInterrupt:
     print("\nSpegnimento del Controller")
     client.loop_stop()
