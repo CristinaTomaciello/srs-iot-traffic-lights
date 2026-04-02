@@ -1,18 +1,13 @@
-services:
-  mqtt-broker:
-    image: eclipse-mosquitto:latest
-    container_name: semafori-mqtt-broker
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/data:/mosquitto/data
-    restart: unless-stopped
+networks:
+  srs-net:
+    driver: bridge
 
+services:
   influxdb:
     image: influxdb:2.7
     container_name: semafori-tsdb
+    networks:
+      - srs-net
     ports:
       - "8086:8086"
     environment:
@@ -29,10 +24,13 @@ services:
       context: .
       dockerfile: simulator/webapp/Dockerfile.ui
     container_name: srs_ui
+    networks:
+      - srs-net
     ports:
       - "8080:8080"
     depends_on:
-      - mqtt-broker
+      - haproxy-1
+      - haproxy-2
     restart: unless-stopped
 
   srs-simulator:
@@ -40,8 +38,11 @@ services:
       context: .
       dockerfile: simulator/Dockerfile.nodo
     container_name: srs_nodes_simulator
+    networks:
+      - srs-net
     depends_on:
-      - mqtt-broker
+      - haproxy-1
+      - haproxy-2
     restart: unless-stopped
 
   srs-controller:
@@ -49,7 +50,84 @@ services:
       context: .
       dockerfile: controller/Dockerfile.controller
     container_name: srs_main_controller
+    networks:
+      - srs-net
     depends_on:
       - influxdb
-      - mqtt-broker
+      - haproxy-1
+      - haproxy-2
+    restart: unless-stopped
+
+  # --- EMQX CLUSTER ---
+  emqx-1:
+    image: emqx:5.3
+    container_name: srs-emqx-1
+    hostname: srs-emqx-1
+    networks:
+      - srs-net
+    ports:
+      - "18083:18083"
+    environment:
+      - EMQX_NODE_NAME=emqx@srs-emqx-1.srs-iot-traffic-lights_srs-net
+      - EMQX_CLUSTER__DISCOVERY_STRATEGY=static
+      - EMQX_CLUSTER__STATIC__SEEDS=[emqx@srs-emqx-1.srs-iot-traffic-lights_srs-net,emqx@srs-emqx-2.srs-iot-traffic-lights_srs-net]
+      - EMQX_NODE__COOKIE=srs_secret_cookie
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/1883' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  emqx-2:
+    image: emqx:5.3
+    container_name: srs-emqx-2
+    hostname: srs-emqx-2
+    networks:
+      - srs-net
+    ports:
+      - "18084:18083"
+    environment:
+      - EMQX_NODE_NAME=emqx@srs-emqx-2.srs-iot-traffic-lights_srs-net
+      - EMQX_CLUSTER__DISCOVERY_STRATEGY=static
+      - EMQX_CLUSTER__STATIC__SEEDS=[emqx@srs-emqx-1.srs-iot-traffic-lights_srs-net,emqx@srs-emqx-2.srs-iot-traffic-lights_srs-net]
+      - EMQX_NODE__COOKIE=srs_secret_cookie
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/1883' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- HAPROXY (ENTRY POINTS) ---
+  haproxy-1:
+    image: haproxy:2.8
+    container_name: srs-haproxy-1
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "1883:1883"
+    depends_on:
+      emqx-1:
+        condition: service_healthy
+      emqx-2:
+        condition: service_healthy
+    restart: unless-stopped
+
+  haproxy-2:
+    image: haproxy:2.8
+    container_name: srs-haproxy-2
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "1884:1883"
+    depends_on:
+      emqx-1:
+        condition: service_healthy
+      emqx-2:
+        condition: service_healthy
     restart: unless-stopped
