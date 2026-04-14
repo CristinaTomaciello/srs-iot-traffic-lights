@@ -135,3 +135,14 @@ services:
       emqx-2:
         condition: service_healthy
     restart: unless-stopped
+  
+
+  mcp-edge-recovery:
+      build:
+        context: ./mcp_servers
+        dockerfile: Dockerfile.mcp
+      # Forziamo il nome dell'immagine per farla coincidere con opencode.json
+      image: srs-edge-recovery-mcp:latest 
+      # Il profilo impedisce che il container parta in automatico con gli altri
+      profiles:
+        - mcp_tools

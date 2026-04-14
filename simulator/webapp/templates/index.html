@@ -283,6 +283,22 @@
                 <input type="number" id="inj-count" min="1" max="50" value="5">
             </div>
             <button class="btn btn-inject" onclick="injectCars()">INIETTA AUTO</button>
+            <h3>Simulazione Guasti (Crash)</h3>
+            <div class="form-group">
+                <label>ID Incrocio (es. INC_0_0)</label>
+                <input type="text" id="crash-incrocio" placeholder="INC_0_0" value="INC_0_0">
+            </div>
+            <div class="form-group">
+                <label>Semaforo da colpire</label>
+                <select id="crash-direzione">
+                    <option value="NORD">NORD</option>
+                    <option value="SUD">SUD</option>
+                    <option value="EST">EST</option>
+                    <option value="OVEST">OVEST</option>
+                </select>
+            </div>
+            <button class="btn btn-pause" onclick="crashNode()" style="background: #c23616;">Crash 💥</button>
+        </div>
         </div>
     </div>
     
