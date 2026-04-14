@@ -31,6 +31,7 @@ class NodoIncrocio:
             sys.exit(1)
         
         self.semafori = {}
+        self.last_states = {}
         for s_id, cfg in full_topo.items():
             if s_id.startswith(self.id):
                 dir_name = s_id.split("_")[-1]
@@ -78,9 +79,18 @@ class NodoIncrocio:
             elif "fault_injection" in msg.topic:
                 dir_name = msg.topic.split("/")[3].split("_")[-1]
                 f_type = payload.get("type")
-                if f_type == "SOFTWARE_CRASH": os._exit(1)
-                elif f_type == "HARDWARE_FAILURE": self.semafori[dir_name]["is_faulty"] = True
-                elif f_type == "REPAIR": self.semafori[dir_name]["is_faulty"] = False
+                
+                if f_type == "SOFTWARE_CRASH":
+                    # Invece di os._exit(1), "congeliamo" solo questa direzione
+                    self.semafori[dir_name]["is_faulty"] = True
+                    print(f"[{self.id}] SOFTWARE CRASH simulato per {dir_name}")
+                elif f_type == "HARDWARE_FAILURE":
+                    self.semafori[dir_name]["is_faulty"] = True
+                elif f_type == "REPAIR":
+                    self.semafori[dir_name]["is_faulty"] = False
+                    s_id = self.semafori[dir_name]["id"]
+                    if s_id in self.last_states:
+                        del self.last_states[s_id]
             elif "config" in msg.topic:
                 dir_name = msg.topic.split("/")[2].split("_")[-1]
                 self.semafori[dir_name]["green_duration"] = int(payload["green_duration"])
@@ -211,10 +221,11 @@ class NodoIncrocio:
                         "green_duration": s["green_duration"]
                     }
                     
-                    # Pubblichiamo SOLO se qualcosa è cambiato rispetto all'ultimo secondo
-                    if payload != last_states.get(s['id']):
+                    # Pubblichiamo SOLO se qualcosa è cambiato 
+                    if payload != self.last_states.get(s['id']): # <--- USA self.last_states
+                        print(f"[DEBUG NODO {self.id}] 📤 Pubblico nuovo stato per {s['id']}: {payload}", flush=True)
                         self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
-                        last_states[s['id']] = payload # Aggiorna la memoria locale
+                        self.last_states[s['id']] = payload # <--- USA self.last_states
                 
                 # Respiro per la CPU per mantenere la sincronia temporale
                 time.sleep(1)

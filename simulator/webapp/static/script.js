@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", async () => {
     const response = await fetch('/api/topology');
     const topology = await response.json();
+    const lastUpdateTimestamps = new Map();
 
     const cityMap = document.getElementById("city-map");
     let maxRow = 0;
@@ -200,3 +201,15 @@ function injectCars() {
     })
     .catch(error => console.error("Errore di rete:", error));
 }
+setInterval(() => {
+    const NOW = Date.now();
+    lastUpdateTimestamps.forEach((ts, id) => {
+        if (NOW - ts > 10000) { // Se non parla da più di 10 secondi
+            const el = document.getElementById(id);
+            if (el) {
+                const light = el.querySelector(".light-bulb");
+                light.className = "light-bulb offline";
+            }
+        }
+    });
+}, 3000);
