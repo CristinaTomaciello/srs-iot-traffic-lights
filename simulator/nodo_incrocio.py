@@ -223,7 +223,6 @@ class NodoIncrocio:
                     
                     # Pubblichiamo SOLO se qualcosa è cambiato 
                     if payload != self.last_states.get(s['id']): # <--- USA self.last_states
-                        print(f"[DEBUG NODO {self.id}] 📤 Pubblico nuovo stato per {s['id']}: {payload}", flush=True)
                         self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
                         self.last_states[s['id']] = payload # <--- USA self.last_states
                 

@@ -1,7 +1,9 @@
+const lastUpdateTimestamps = new Map();
+
 document.addEventListener("DOMContentLoaded", async () => {
     const response = await fetch('/api/topology');
     const topology = await response.json();
-    const lastUpdateTimestamps = new Map();
+    
 
     const cityMap = document.getElementById("city-map");
     let maxRow = 0;
@@ -201,6 +203,28 @@ function injectCars() {
     })
     .catch(error => console.error("Errore di rete:", error));
 }
+
+// Funzione per inviare il comando di crash hardware
+function crashNode() {
+    const incrocio = document.getElementById('crash-incrocio').value;
+    const direzione = document.getElementById('crash-direzione').value;
+
+    fetch('/api/admin/crash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incrocio: incrocio, direzione: direzione })
+    })
+    .then(response => {
+        if (!response.ok) {
+            console.error("Errore nell'invio del comando di crash");
+        } else {
+            console.log(`💥 Comando HARDWARE_FAILURE inviato a ${incrocio}_${direzione}`);
+        }
+    })
+    .catch(error => console.error("Errore di rete:", error));
+}
+
+
 setInterval(() => {
     const NOW = Date.now();
     lastUpdateTimestamps.forEach((ts, id) => {

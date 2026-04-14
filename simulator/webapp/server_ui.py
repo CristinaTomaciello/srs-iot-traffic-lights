@@ -121,6 +121,10 @@ class InjectCommand(BaseModel):
     direzione: str
     count: int
 
+class CrashCommand(BaseModel):
+    incrocio: str
+    direzione: str
+
 # --- API Endpoints ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -171,6 +175,24 @@ async def startup_event():
 async def shutdown_event():
     mqtt_client.loop_stop()
     mqtt_client.disconnect()
+
+@app.post("/api/admin/crash")
+async def admin_crash(cmd: CrashCommand):
+    # Formatta esattamente come fa scenario_manager.py
+    incrocio = cmd.incrocio.strip().upper()
+    if not incrocio.startswith("INC_"):
+        incrocio = "INC_" + incrocio
+        
+    direzione = cmd.direzione.strip().upper()
+    node_id = f"{incrocio}_{direzione}"
+    
+    # Topic e payload identici a scenario_manager.py
+    topic = f"srs/admin/node/{node_id}/fault_injection"
+    payload = {"type": "HARDWARE_FAILURE"}
+    
+    mqtt_client.publish(topic, json.dumps(payload))
+    print(f"[UI ADMIN] 💥 HARDWARE_FAILURE inviato a {node_id}")
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -74,9 +74,6 @@ def on_message(client, userdata, msg):
             "last_seen": time.time(),
             "alert_sent": False # Flag per non spammare l'allarme
         }
-        # AGGIUNGI QUESTA PRINT DI DEBUG
-        print(f"[DEBUG CONTROLLER] 📥 Ricevuto aggiornamento per {incrocio_id}_{semaforo_id}. Scrittura su InfluxDB...", flush=True)
-        
         # Salvataggio su InfluxDB
         punto_storico = influxdb_client.Point("stato_traffico") \
         .tag("incrocio", incrocio_id) \
@@ -126,8 +123,6 @@ try:
                     # Se il nodo tace da > 30s e l'allarme non è già scattato
                     if secondi_silenzio > 30 and not info.get("alert_sent", False):
                         nodo_guasto = sem_id
-                        print(f"\n[WATCHDOG] 🚨 Rilevata anomalia su {nodo_guasto} (silenzio da > 30s).")
-                        print(f"[WATCHDOG] Generazione evento MQTT 'node_down' in corso...", flush=True)
                         
                         client.publish("srs/alerts/node_down", nodo_guasto, qos=1)
                         info["alert_sent"] = True # Evita di inviare loop di allarmi per lo stesso nodo

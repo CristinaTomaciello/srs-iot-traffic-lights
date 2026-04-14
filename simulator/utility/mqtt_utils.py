@@ -19,7 +19,7 @@ def connetti_con_failover(client, client_id, check_connessione, brokers=["haprox
                 
                 for _ in range(30):
                     if check_connessione():
-                        print(f"[{client_id}] Connessione di emergenza stabilita su {broker}", flush=True)
+                        print(f"[{client_id}] Connessione stabilita su {broker}", flush=True)
                         return
                     time.sleep(0.1)
                     
