@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/big-pickle",
+  "server": {
+    "port": 4096,
+    "hostname": "0.0.0.0",
+    "cors": ["*"]
+  },
+  "mcp": {
+    "edge_recovery": {
+      "type": "local",
+      "command": ["nc", "mcp-recovery-service", "8000"],
+      "enabled": true
+    }
+  },
+  "agent": {
+    "recovery-agent": {
+      "description": "Agente di Bounded Remediation con Escalation Umana",
+      "prompt": "Segui rigorosamente questo iter operativo per ogni EVENTO DI SISTEMA RICEVUTO:\n\nProcedura di Bounded Remediation (Closed-Loop):\n1. Azione: Usa immediatamente il tool 'restart_edge_node' sul nodo indicato nell'allarme.\n2. Verifica: Dopo il riavvio, usa 'get_node_telemetry' sullo stesso nodo. Analizza il valore 'secondi_fa'.\n3. Decisione: Se 'secondi_fa' è ancora > 30, usa obbligatoriamente il tool 'escalate_to_human' fornendo un riassunto diagnostico.\n4. Report: Scrivi SOLO un riassunto di 2 righe con l'azione eseguita e lo stato finale.\n\nREGOLE RIGIDE: Non tentare altre azioni oltre a quelle elencate. Se non puoi verificare lo stato, procedi comunque con l'escalation per sicurezza. Rispetta il limite delle 2 righe nel report.",
+      "tools": {
+        "*": false,
+        "edge_recovery_*": true
+      }
+    }
+  }
+}
