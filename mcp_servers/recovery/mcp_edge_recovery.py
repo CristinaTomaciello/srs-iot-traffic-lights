@@ -3,11 +3,10 @@ import paho.mqtt.client as mqtt
 import influxdb_client
 import json
 import time
-import sys  # Aggiunto per gestire i canali di output
+import sys
 
 mcp = FastMCP("EdgeRecoveryMCP")
 
-# --- CONFIGURAZIONE AGGIORNATA CON I TUOI NOMI REALI ---
 INFLUX_URL = "http://semafori-tsdb:8086" 
 INFLUX_TOKEN = "supersecrettoken123"
 INFLUX_ORG = "srs_org"
@@ -19,7 +18,7 @@ def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     if rc == 0:
         is_mqtt_connected = True
-        # Usiamo sys.stderr per non corrompere il canale JSON di MCP!
+        # Usiamo sys.stderr per non corrompere il canale JSON di MCP
         print("[MCP_AGENT] Connesso al broker MQTT!", file=sys.stderr, flush=True)
 
 def on_disconnect(client, userdata, flags, rc, properties):
@@ -32,7 +31,6 @@ mqtt_client.on_connect = on_connect
 mqtt_client.on_disconnect = on_disconnect
 
 def connetti_mqtt_agente():
-    # Usiamo i nomi reali dei tuoi bilanciatori
     brokers = ["srs-haproxy-1", "srs-haproxy-2"]
     for broker in brokers:
         try:
@@ -114,7 +112,6 @@ def restart_edge_node(node_id: str) -> str:
         mqtt_client.publish(topic, json.dumps(payload), qos=1)
         time.sleep(1)
         
-        # (Aggiorna contatore tentativi)
         return f"SUCCESSO: Inviato comando REPAIR a {node_id}. Il simulatore dovrebbe ora riprendere l'attività."
     except Exception as e:
         return f"ERRORE MQTT: {str(e)}"
@@ -123,7 +120,7 @@ def restart_edge_node(node_id: str) -> str:
 def escalate_to_human(node_id: str, diagnostic_summary: str) -> str:
     """Scala il problema a un operatore umano."""
     print("\n" + "="*60, file=sys.stderr)
-    print("🚨 ESCALATION UMANA RICHIESTA DALL'AGENTE 🚨", file=sys.stderr)
+    print("ESCALATION UMANA RICHIESTA DALL'AGENTE 🚨", file=sys.stderr)
     print(f"NODO COINVOLTO: {node_id}", file=sys.stderr)
     print(f"ANALISI: {diagnostic_summary}", file=sys.stderr)
     print("="*60 + "\n", file=sys.stderr, flush=True)

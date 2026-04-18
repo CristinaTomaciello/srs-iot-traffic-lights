@@ -1,0 +1,7 @@
+FROM python:3.10-slim
+RUN pip install --no-cache-dir paho-mqtt requests
+WORKDIR /app
+COPY bridge_service.py .
+ENV MQTT_BROKER="mosquitto"
+ENV OPENCODE_URL="http://brain_server:4096"
+CMD ["python", "-u", "bridge_service.py"]

@@ -2,6 +2,8 @@ networks:
   srs-net:
     driver: bridge
 
+
+
 services:
   influxdb:
     image: influxdb:2.7
@@ -23,6 +25,8 @@ services:
       - ./dashboards:/docker-entrypoint-initdb.d
     restart: unless-stopped
 
+
+
   srs-ui:
     build:
       context: .
@@ -37,6 +41,8 @@ services:
       - haproxy-2
     restart: unless-stopped
 
+
+
   srs-simulator:
     build:
       context: .
@@ -48,6 +54,8 @@ services:
       - haproxy-1
       - haproxy-2
     restart: unless-stopped
+
+
 
   srs-controller:
     build:
@@ -62,7 +70,9 @@ services:
       - haproxy-2
     restart: unless-stopped
 
-  # --- EMQX CLUSTER ---
+
+
+
   emqx-1:
     image: emqx:5.3
     container_name: srs-emqx-1
@@ -82,6 +92,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+
 
   emqx-2:
     image: emqx:5.3
@@ -103,7 +115,8 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # --- HAPROXY (ENTRY POINTS) ---
+
+
   haproxy-1:
     image: haproxy:2.8
     container_name: srs-haproxy-1
@@ -120,6 +133,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+
+
   haproxy-2:
     image: haproxy:2.8
     container_name: srs-haproxy-2
@@ -135,14 +150,58 @@ services:
       emqx-2:
         condition: service_healthy
     restart: unless-stopped
-  
 
-  mcp-edge-recovery:
-      build:
-        context: ./mcp_servers
-        dockerfile: Dockerfile.mcp
-      # Forziamo il nome dell'immagine per farla coincidere con opencode.json
-      image: srs-edge-recovery-mcp:latest 
-      # Il profilo impedisce che il container parta in automatico con gli altri
-      profiles:
-        - mcp_tools
+
+
+  opencode-brain:
+    build:
+      context: ./opencode
+      dockerfile: Dockerfile.opencode
+    container_name: brain_server
+    networks:
+      - srs-net
+    ports:
+      - "4096:4096"
+    depends_on:
+      - mcp-recovery-service
+    environment:
+      - OPENCODE_SERVER_PASSWORD=srs
+    restart: unless-stopped
+
+
+
+  srs-bridge:
+    build:
+      context: ./bridge
+      dockerfile: Dockerfile.bridge
+    container_name: srs_bridge
+    networks:
+      - srs-net
+    environment:
+      - MQTT_BROKER=srs-haproxy-1
+      - OPENCODE_URL=http://brain_server:4096
+    depends_on:
+      - opencode-brain
+      - haproxy-1
+    restart: unless-stopped
+
+
+
+  mcp-recovery-service:
+    build:
+      context: ./mcp_servers/recovery
+      dockerfile: Dockerfile.recovery
+    container_name: mcp_recovery
+    networks:
+      - srs-net
+    ports:
+      - "8000:8000"
+    depends_on:
+      haproxy-1:
+        condition: service_started
+      haproxy-2:
+        condition: service_started
+      influxdb:
+        condition: service_started
+    # Questo dà tempo alla rete Docker di stabilizzarsi prima di crashare
+    restart: on-failure
