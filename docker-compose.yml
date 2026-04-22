@@ -189,21 +189,40 @@ services:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
 
-
-
-  srs-bridge:
+  bridge-1:
     build:
-      context: ./bridge
-      dockerfile: Dockerfile.bridge
-    container_name: srs_bridge
+      context: .
+      dockerfile: bridge/Dockerfile.bridge
+    container_name: bridge_1
+    environment:
+      - WORKER_ID=1
+      - MQTT_BROKER=haproxy-1
     networks:
       - srs-net
+    restart: unless-stopped
+
+  bridge-2:
+    build:
+      context: .
+      dockerfile: bridge/Dockerfile.bridge
+    container_name: bridge_2
     environment:
-      - MQTT_BROKER=srs-haproxy-1
-      - OPENCODE_URL=http://brain_server:4096
-    depends_on:
-      - opencode-brain
-      - haproxy-1
+      - WORKER_ID=2
+      - MQTT_BROKER=haproxy-1
+    networks:
+      - srs-net
+    restart: unless-stopped
+
+  bridge-3:
+    build:
+      context: .
+      dockerfile: bridge/Dockerfile.bridge
+    container_name: bridge_3
+    environment:
+      - WORKER_ID=3
+      - MQTT_BROKER=haproxy-1
+    networks:
+      - srs-net
     restart: unless-stopped
 
 
