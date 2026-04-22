@@ -57,21 +57,41 @@ services:
 
 
 
-  srs-controller:
+  srs-controller-alpha:
     build:
       context: .
       dockerfile: controller/Dockerfile.controller
-    container_name: srs_main_controller
+    container_name: srs_controller_alpha
+    environment:
+      - NODE_NAME=ALPHA
     networks:
       - srs-net
     depends_on:
       - influxdb
       - haproxy-1
       - haproxy-2
+      - redis-lock-1
+      - redis-lock-2
+      - redis-lock-3
     restart: unless-stopped
-
-
-
+  
+  srs-controller-beta:
+    build:
+      context: .
+      dockerfile: controller/Dockerfile.controller
+    container_name: srs_controller_beta
+    environment:
+      - NODE_NAME=BETA
+    networks:
+      - srs-net
+    depends_on:
+      - influxdb
+      - haproxy-1
+      - haproxy-2
+      - redis-lock-1
+      - redis-lock-2
+      - redis-lock-3
+    restart: unless-stopped
 
   emqx-1:
     image: emqx:5.3
@@ -225,3 +245,21 @@ services:
       influxdb:
         condition: service_started
     restart: on-failure
+
+  redis-lock-1:
+    image: redis:alpine
+    command: redis-server --save "" --appendonly no
+    networks:
+      - srs-net
+
+  redis-lock-2:
+    image: redis:alpine
+    command: redis-server --save "" --appendonly no
+    networks:
+      - srs-net
+
+  redis-lock-3:
+    image: redis:alpine
+    command: redis-server --save "" --appendonly no
+    networks:
+      - srs-net
