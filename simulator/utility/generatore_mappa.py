@@ -3,8 +3,8 @@ import os
 import random
 
 # Cambia questi valori per ingrandire o rimpicciolire la città
-ROWS = 4
-COLS = 8
+ROWS = 3
+COLS = 5
 
 topology = {}
 
@@ -23,12 +23,8 @@ for r in range(ROWS):
             if dir_in == "OVEST" and c == 0: is_border = True
             if dir_in == "EST" and c == COLS - 1: is_border = True
 
-            # Assegna un tempo di verde dinamico basato sulla posizione del semaforo
-            if dir_in in ["NORD", "SUD"]:
-                green_duration = random.randint(10, 15) # Arterie principali
-            else:
-                green_duration = random.randint(4, 7)   # Strade secondarie
-
+            green_duration = 10
+            
             # Calcolo delle rotte con vie di fuga se si tocca il bordo
             if dir_in == "NORD":
                 strade_uscita["dritto"] = {"target": f"INC_{r+1}_{c}_NORD", "tempo_transito": 6} if r + 1 < ROWS else {"target": "OUT", "tempo_transito": 2}

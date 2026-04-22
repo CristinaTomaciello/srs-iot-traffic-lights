@@ -6,7 +6,7 @@ from influxdb_client.client.write_api import ASYNCHRONOUS, WriteOptions
 import sys
 import os
 
-#path per le utility
+# path per le utility
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import simulator.utility.mqtt_utils as utils
 
@@ -25,7 +25,7 @@ opzioni_asincrone = WriteOptions(
 )
 write_api = db_client.write_api(write_options=opzioni_asincrone)
 
-#Stato globale del Controller
+# Stato globale del Controller
 is_mqtt_connected = False
 is_simulation_active = False
 global_state = {}
@@ -34,6 +34,11 @@ global_state = {}
 start_time = time.time()
 last_heartbeat_time = 0
 HEARTBEAT_INTERVAL = 10  # Invia un battito ogni 10 secondi
+
+# NUOVO: Variabili per il Watchdog del Traffico
+last_traffic_check_time = 0
+TRAFFIC_CHECK_INTERVAL = 60
+HARDWARE_CHECK_INTERVAL = 30
 
 def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
@@ -44,7 +49,7 @@ def on_connect(client, userdata, flags, rc, properties):
         client.subscribe("srs/admin/control")
 
 def on_message(client, userdata, msg):
-    global is_simulation_active
+    global is_simulation_active, last_traffic_check_time
     try:
         # Gestione comandi simulazione
         if msg.topic == "srs/admin/control":
@@ -54,6 +59,8 @@ def on_message(client, userdata, msg):
                 is_simulation_active = True
                 print("[CONTROLLER] Simulazione AVVIATA. Watchdog attivato.")
                 ora = time.time()
+                # Allinea i timer per evitare allerte istantanee al resume
+                last_traffic_check_time = ora 
                 for inc_id in global_state:
                     for sem_id in global_state[inc_id]:
                         global_state[inc_id][sem_id]["last_seen"] = ora
@@ -128,21 +135,21 @@ try:
             }
             client.publish("srs/controller/heartbeat", json.dumps(heartbeat_payload), qos=0)
             last_heartbeat_time = ora_attuale
-            # print(f"[DEBUG] Heartbeat inviato a {ora_attuale}", flush=True)
 
         # Controllo della connessione del Controller e failover se necessario
         if not check_controller_connection():
             print("[CONTROLLER_CLIENT] Connessione persa! Rotazione verso il bilanciatore secondario...", flush=True)
             utils.connetti_con_failover(client, "CONTROLLER_CLIENT", check_controller_connection)
             
-        # Watchdog per nodi silenti
+        # I Watchdog girano SOLO se la simulazione è attiva (Play)
         if is_simulation_active:
+            
+            # 1. WATCHDOG HARDWARE (Silenzio dei nodi)
             for inc_id, semafori in global_state.items():
                 for sem_id, info in semafori.items():
                     secondi_silenzio = ora_attuale - info["last_seen"]
                     
-                    if secondi_silenzio > 30 and not info.get("alert_sent", False):
-                        # Payload per l'Agente AI di OpenCode
+                    if secondi_silenzio > HARDWARE_CHECK_INTERVAL and not info.get("alert_sent", False):
                         alert_payload = {
                             "event": "NODE_SILENCE_TIMEOUT",
                             "node_id": sem_id,
@@ -151,10 +158,16 @@ try:
                             "seconds_offline": int(secondi_silenzio),
                             "timestamp": ora_attuale
                         }
-                        
                         client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
                         info["alert_sent"] = True
-                        print(f"[WATCHDOG] Nodo {sem_id} silente. Segnale di recovery inviato.")
+                        print(f"[WATCHDOG-HW] Nodo {sem_id} silente. Segnale di recovery inviato.")
+
+            # 2. WATCHDOG TRAFFICO (Proattivo)
+            if ora_attuale - last_traffic_check_time >= TRAFFIC_CHECK_INTERVAL:
+                traffic_payload = {"event": "PROACTIVE_TRAFFIC_CHECK", "timestamp": ora_attuale}
+                client.publish("srs/alerts/traffic_check", json.dumps(traffic_payload), qos=1)
+                last_traffic_check_time = ora_attuale
+                print(f"[WATCHDOG-TRAFFICO] Scattati i {TRAFFIC_CHECK_INTERVAL}s. Segnale di ronda inviato al Bridge.")
 
         time.sleep(1)
         

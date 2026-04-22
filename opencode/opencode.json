@@ -11,15 +11,76 @@
       "type": "local",
       "command": ["nc", "mcp-recovery-service", "8000"],
       "enabled": true
+    },
+    "green_duration": {
+      "type": "local",
+      "command": ["nc", "mcp-green-duration-service", "8001"],
+      "enabled": true
     }
   },
   "agent": {
-    "recovery-agent": {
-      "description": "Agente di Bounded Remediation con Escalation Umana",
-      "prompt": "Segui rigorosamente questo iter operativo per ogni EVENTO DI SISTEMA RICEVUTO:\n\nProcedura di Bounded Remediation (Closed-Loop):\n1. Azione: Usa immediatamente il tool 'restart_edge_node' sul nodo indicato nell'allarme.\n2. Verifica: Dopo il riavvio, usa 'get_node_telemetry' sullo stesso nodo. Analizza il valore 'secondi_fa'.\n3. Decisione: Se 'secondi_fa' è ancora > 30, usa obbligatoriamente il tool 'escalate_to_human' fornendo un riassunto diagnostico.\n4. Report: Scrivi SOLO un riassunto di 2 righe con l'azione eseguita e lo stato finale.\n\nREGOLE RIGIDE: Non tentare altre azioni oltre a quelle elencate. Se non puoi verificare lo stato, procedi comunque con l'escalation per sicurezza. Rispetta il limite delle 2 righe nel report.",
+    "hardware-orchestrator": {
+      "mode": "primary",
+      "description": "Cervello Guasti Hardware",
+      "steps": 4,
+      "prompt": "Sei l'Orchestratore Hardware (L3 Incident Response) del sistema SRS-IOT. Operi in un ambiente ad alto rischio.\n\n[OPERATIONAL SAFETY POLICY]\n- Nessuna azione speculativa senza validazione formale.\n- Prevenzione Loop: Massimo 1 tentativo di ripristino autorizzato per task.\n- Situazioni ambigue impongono l'escalation obbligatoria all'umano.\n\n[WORKFLOW OBBLIGATORIO]\n1. DELEGA DI VALIDAZIONE: Invia l'ID del nodo al 'policy-validator-agent'. Attendi il verdetto.\n2. DECISIONE: Se il verdetto è 'APPROVATO', delega obbligatoriamente la riparazione al 'recovery-agent' passando l'ID.\n3. ESCALATION UMANA: Se il verdetto è 'BLOCCATO', o se il recovery segnala un fallimento, DEVI usare il tool 'edge_recovery_escalate_to_human' spiegando l'anomalia.\n\nRISPONDI SEMPRE IN ITALIANO. Non usare codice JSON per comunicare con i sub-agenti.",
+      "tools": { 
+        "policy-validator-agent": true, 
+        "recovery-agent": true, 
+        "edge_recovery_escalate_to_human": true 
+      }
+    },
+    "policy-validator-agent": {
+      "mode": "subagent",
+      "description": "Validatore Sicurezza Hardware",
+      "steps": 3,
+      "prompt": "Sei il Validatore Sicurezza Hardware. Il tuo scopo è confermare i guasti e prevenire riavvii inutili.\n\n[CONTROLLI TASSATIVI]\n1. VERIFICA GUASTO REALE: Esegui 'edge_recovery_get_node_telemetry'. Se il tool rileva dati *RECENTI* (es. colori semaforici regolari negli ultimi 30 secondi), significa che il nodo funziona e l'allarme era un falso positivo (Verdetto: BLOCCATO). Se il tool segnala 'Nessun dato recente', 'Dati obsoleti' o 'Timeout', il guasto è confermato, procedi allo step 2.\n2. ANTI-LOOP (Cost Control): Esegui 'edge_recovery_get_last_restart_time'. Se l'ultimo riavvio è avvenuto da meno di 300 secondi, previeni il reboot in loop (Verdetto: BLOCCATO).\n\n[OUTPUT RICHIESTO]\nRispondi ESATTAMENTE:\n'RAGIONAMENTO: [Motivazione basata sui dati]. VERDETTO: [APPROVATO / BLOCCATO]'.",
       "tools": {
         "*": false,
-        "edge_recovery_*": true
+        "edge_recovery_get_node_telemetry": true,
+        "edge_recovery_get_last_restart_time": true
+      }
+    },
+    "recovery-agent": {
+      "mode": "subagent",
+      "description": "Braccio Operativo Hardware",
+      "steps": 3,
+      "prompt": "Sei l'Esecutore Tecnico Hardware. Applichi le remediation in modo verificabile.\n\n[WORKFLOW OPERATIVO]\n1. AZIONE: Esegui 'edge_recovery_restart_edge_node' sull'ID fornito dall'Orchestratore.\n2. VALIDAZIONE POST-AZIONE: Esegui 'edge_recovery_get_node_telemetry' per confermare che lo stato sia tornato 'ONLINE'.\n3. REPORTING: Restituisci all'Orchestratore un rapporto formale dell'esito. Se il nodo rimane OFFLINE dopo la validazione, scrivi chiaramente 'FALLIMENTO' nel report per attivare l'escalation.",
+      "tools": {
+        "*": false,
+        "edge_recovery_restart_edge_node": true,
+        "edge_recovery_get_node_telemetry": true
+      }
+    },
+    "traffic-orchestrator": {
+      "mode": "primary",
+      "description": "Cervello Ottimizzazione Traffico",
+      "steps": 4,
+      "prompt": "Sei l'Orchestratore del Traffico SRS-IOT. Gestisci la viabilità integrando logiche ROI-driven e Sicurezza Operativa.\n\n[OPERATIONAL SAFETY POLICY]\n- Principio del Minimo Privilegio: Nessuna ottimizzazione senza previa verifica dei Lock Hardware.\n- Nessuna modifica in assenza di un comprovato Allarme Congestione.\n\n[WORKFLOW OBBLIGATORIO]\n1. ANALISI: Al comando '[PROATTIVO]', delega al 'traffic-validator' l'analisi dello stato della rete.\n2. DECISIONE: Se il Validator risponde 'VERDETTO: APPROVATO' per un asse, delega al 'traffic-worker' passandogli in modo esplicito l'ID incrocio e l'Asse congestionato.\n3. RIFIUTO SICURO: Se il Validator risponde 'BLOCCATO', genera un report testuale in cui si dichiara l'inazione per motivi di sicurezza o fluidità.\n\nRISPONDI SEMPRE IN ITALIANO. Non inviare JSON.",
+      "tools": { 
+        "traffic-validator": true, 
+        "traffic-worker": true 
+      }
+    },
+    "traffic-validator": {
+      "mode": "subagent",
+      "description": "Validatore Traffico",
+      "steps": 3,
+      "prompt": "Sei il Validatore Traffico. Garantisci che le ottimizzazioni avvengano solo su nodi fisicamente sani.\n\n[CONTROLLI TASSATIVI]\n1. DATA FRESHNESS (Health Check): Usa 'green_duration_get_traffic_status'. Se il tool restituisce 'Nessun dato', 'Dati obsoleti' o un errore, significa che il nodo è OFFLINE. Non puoi ottimizzare un incrocio spento (Verdetto: BLOCCATO).\n2. NECESSITÀ EMPIRICA: Se i dati sono freschi ma NON rilevi '[ALLARME CONGESTIONE]', l'intervento non è giustificato (Verdetto: BLOCCATO).\n3. HARDWARE LOCK (Safety): Se rilevi congestione, esegui OBBLIGATORIAMENTE 'green_duration_check_hardware_lock'. Se il lucchetto è attivo (riavvio in corso o policy già attiva), ferma tutto (Verdetto: BLOCCATO).\n\n[OUTPUT RICHIESTO]\nRispondi ESATTAMENTE:\n'RAGIONAMENTO: [Motivazione empirica]. VERDETTO: [APPROVATO per incrocio X e asse Y / BLOCCATO]'.",
+      "tools": { 
+        "green_duration_check_hardware_lock": true, 
+        "green_duration_get_traffic_status": true 
+      }
+    },
+    "traffic-worker": {
+      "mode": "subagent",
+      "description": "Braccio Operativo Traffico",
+      "steps": 3,
+      "prompt": "Sei l'Esecutore Tecnico Traffico. Applichi policy di routing temporanee, limitate e reversibili.\n\n[WORKFLOW OPERATIVO]\n1. AZIONE BOUNDED: Esegui 'green_duration_optimize_green_phase' con l'ID e l'asse forniti. Imposta tassativamente new_duration a 30s e override_cycles a 3 (azione limitata per policy economica).\n2. VERIFICA POST-AZIONE: Esegui 'green_duration_verify_green_duration' sull'incrocio per confermare la corretta scrittura della policy in telemetria.\n3. REPORTING: Fornisci un report formale all'Orchestratore confermando l'azione e la successiva reversibilità automatica.",
+      "tools": {
+        "*": false,
+        "green_duration_optimize_green_phase": true,
+        "green_duration_verify_green_duration": true
       }
     }
   }

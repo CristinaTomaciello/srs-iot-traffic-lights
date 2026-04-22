@@ -75,6 +75,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             cityMap.appendChild(div);
         }
     }
+    const injSelect = document.getElementById("inj-incrocio");
+    const crashSelect = document.getElementById("crash-incrocio");
+    
+    if(injSelect && crashSelect) {
+        injSelect.innerHTML = "";
+        crashSelect.innerHTML = "";
+
+        incroci.forEach((val, id) => {
+            const opt1 = document.createElement("option");
+            opt1.value = id;
+            opt1.innerText = id;
+            injSelect.appendChild(opt1);
+
+            const opt2 = document.createElement("option");
+            opt2.value = id;
+            opt2.innerText = id;
+            crashSelect.appendChild(opt2);
+        });
+    }
 
     setTimeout(() => {
         drawRoads(roadConnections);
@@ -140,17 +159,21 @@ ws.onmessage = function(event) {
     const elementId = `${data.incrocio}_${data.direzione}`;
     const semaforoDiv = document.getElementById(elementId);
 
+    lastUpdateTimestamps.set(elementId, Date.now());
+
     if (semaforoDiv) {
         const light = semaforoDiv.querySelector(".light-bulb");
         
         if (data.stato.includes("ROSSO")) {
             light.className = "light-bulb red";
+        } else if (data.stato === "GIALLO_LAMPEGGIANTE") {
+            light.className = "light-bulb yellow-flash"; // Graceful Degradation
         } else if (data.stato.includes("VERDE")) {
             light.className = "light-bulb green";
         } else if (data.stato.includes("GIALLO")) {
             light.className = "light-bulb yellow";
         } else if (data.stato === "OFFLINE") {
-            light.className = "light-bulb offline"; // <--- NUOVA RIGA
+            light.className = "light-bulb offline"; 
         }
 
         semaforoDiv.querySelector(".coda-badge").innerText = data.coda;
@@ -228,7 +251,7 @@ function crashNode() {
 setInterval(() => {
     const NOW = Date.now();
     lastUpdateTimestamps.forEach((ts, id) => {
-        if (NOW - ts > 10000) { // Se non parla da più di 10 secondi
+        if (NOW - ts > 15000) { 
             const el = document.getElementById(id);
             if (el) {
                 const light = el.querySelector(".light-bulb");

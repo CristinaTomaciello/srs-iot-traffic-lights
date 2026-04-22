@@ -164,6 +164,7 @@ services:
       - "4096:4096"
     depends_on:
       - mcp-recovery-service
+      - mcp-green-duration-service
     environment:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
@@ -203,5 +204,24 @@ services:
         condition: service_started
       influxdb:
         condition: service_started
-    # Questo dà tempo alla rete Docker di stabilizzarsi prima di crashare
+    restart: on-failure
+
+
+
+  mcp-green-duration-service:
+    build:
+      context: ./mcp_servers/green_duration
+      dockerfile: Dockerfile.green
+    container_name: mcp_green_duration
+    networks:
+      - srs-net
+    ports:
+      - "8001:8001"
+    depends_on:
+      haproxy-1:
+        condition: service_started
+      haproxy-2:
+        condition: service_started
+      influxdb:
+        condition: service_started
     restart: on-failure
