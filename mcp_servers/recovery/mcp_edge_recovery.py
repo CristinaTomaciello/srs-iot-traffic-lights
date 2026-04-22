@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
+from influxdb_client.client.write_api import SYNCHRONOUS
 import json
 import time
 import sys
@@ -18,7 +19,6 @@ def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     if rc == 0:
         is_mqtt_connected = True
-        # Usiamo sys.stderr per non corrompere il canale JSON di MCP
         print("[MCP_AGENT] Connesso al broker MQTT!", file=sys.stderr, flush=True)
 
 def on_disconnect(client, userdata, flags, rc, properties):
@@ -46,9 +46,9 @@ def connetti_mqtt_agente():
 
 connetti_mqtt_agente()
 
-restart_counters = {}
-MAX_RESTARTS = 2
-
+# =======================================================
+# TOOL 1: TELEMETRIA (Usato dall'Orchestratore)
+# =======================================================
 @mcp.tool()
 def get_node_telemetry(node_id: str) -> str:
     """Interroga InfluxDB e calcola da quanto tempo il nodo non invia dati."""
@@ -56,19 +56,19 @@ def get_node_telemetry(node_id: str) -> str:
         client = influxdb_client.InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
         query_api = client.query_api()
         
-        # Estrarre l'ID incrocio e direzione (es. INC_0_0 e NORD)
         parts = node_id.split('_')
         incrocio_id = f"{parts[0]}_{parts[1]}_{parts[2]}"
         direzione = parts[-1]
 
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -1h)
+          |> range(start: -1m)
           |> filter(fn: (r) => r["_measurement"] == "stato_traffico")
           |> filter(fn: (r) => r["direzione"] == "{node_id}") 
           |> last()
         """
         result = query_api.query(org=INFLUX_ORG, query=query)
+        client.close()
         
         if not result:
             return f"DIAGNOSI: Il nodo {node_id} non ha mai inviato dati nell'ultima ora. Probabile OFFLINE critico."
@@ -80,7 +80,7 @@ def get_node_telemetry(node_id: str) -> str:
         
         print(f"[DEBUG MCP] Ora MCP: {ora_mcp} | Timestamp DB: {ts_ultimo} | Differenza: {secondi_fa}s", file=sys.stderr, flush=True)
 
-        status = "OPERATIVO" if secondi_fa < 30 else "SOSPETTO CRASH (Nessun dato da >30s)"
+        status = "ONLINE" if secondi_fa < 30 else "OFFLINE_CRITICO"
         
         return (f"--- STATO NODO {node_id} ---\n"
                 f"Ultimo segnale: {secondi_fa} secondi fa\n"
@@ -91,31 +91,78 @@ def get_node_telemetry(node_id: str) -> str:
     except Exception as e:
         return f"ERRORE TELEMETRIA: {str(e)}"
 
+# =======================================================
+# TOOL 2: CONTROLLO AUDIT LOG (Nuovo! Usato dal Validatore)
+# =======================================================
+@mcp.tool()
+def get_last_restart_time(node_id: str) -> str:
+    """Controlla l'Audit Log per verificare da quanti secondi è stato eseguito l'ultimo riavvio su questo nodo."""
+    try:
+        client = influxdb_client.InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+        query_api = client.query_api()
+        
+        query = f"""
+        from(bucket: "{INFLUX_BUCKET}")
+          |> range(start: -1h)
+          |> filter(fn: (r) => r["_measurement"] == "agent_audit")
+          |> filter(fn: (r) => r["node_id"] == "{node_id}")
+          |> filter(fn: (r) => r["_field"] == "action")
+          |> filter(fn: (r) => r["_value"] == "RESTART")
+          |> last()
+        """
+        result = query_api.query(org=INFLUX_ORG, query=query)
+        client.close()
+        
+        if not result:
+            # Ritorna un valore altissimo sicuro se il nodo non è mai stato riavviato
+            return f"Nessun riavvio registrato per {node_id}. (seconds_since_last_restart: 999999)"
+
+        record = result[0].records[0]
+        ts_ultimo_restart = record.get_time().timestamp()
+        secondi_fa = int(time.time() - ts_ultimo_restart)
+
+        return f"L'ultimo riavvio per {node_id} è avvenuto {secondi_fa} secondi fa. (seconds_since_last_restart: {secondi_fa})"
+        
+    except Exception as e:
+        return f"ERRORE AUDIT DB: {str(e)}"
+
+# =======================================================
+# TOOL 3: ESECUZIONE (Usato dal Recovery Agent)
+# =======================================================
 @mcp.tool()
 def restart_edge_node(node_id: str) -> str:
-    """Invia un comando di RIAVVIO a un singolo nodo tramite MQTT."""
-    current_restarts = restart_counters.get(node_id, 0)
-    
-    if current_restarts >= MAX_RESTARTS:
-        return (f"BLOCCO DI SICUREZZA: Il nodo '{node_id}' è già stato riavviato "
-                f"{MAX_RESTARTS} volte. L'automazione è sospesa. "
-                f"Usa il tool 'escalate_to_human' per richiedere approvazione manuale.")
-
+    """Invia un comando di RIAVVIO tramite MQTT e registra l'evento nel DB."""
     if not is_mqtt_connected:
         if not connetti_mqtt_agente():
             return "ERRORE: Impossibile raggiungere i bilanciatori MQTT. Rete compromessa."
 
     try:
+        # 1. Comando fisico MQTT
         topic = f"srs/admin/node/{node_id}/fault_injection"
-        payload = {"type": "REPAIR"} # Questo attiverà is_faulty = False
-        
+        payload = {"type": "REPAIR"}
         mqtt_client.publish(topic, json.dumps(payload), qos=1)
+        
+        # 2. Scrittura su InfluxDB (Control Plane Event Sourcing)
+        client = influxdb_client.InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+        
+        point = influxdb_client.Point("agent_audit") \
+            .tag("node_id", node_id) \
+            .field("action", "RESTART") \
+            .field("status", "success")
+            
+        write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
+        client.close()
+        
         time.sleep(1)
         
-        return f"SUCCESSO: Inviato comando REPAIR a {node_id}. Il simulatore dovrebbe ora riprendere l'attività."
+        return f"SUCCESSO: Riavvio eseguito su {node_id} ed evento salvato nell'Audit Log."
     except Exception as e:
-        return f"ERRORE MQTT: {str(e)}"
+        return f"ERRORE MQTT/DB: {str(e)}"
 
+# =======================================================
+# TOOL 4: ESCALATION (Usato in caso di fallimento o loop)
+# =======================================================
 @mcp.tool()
 def escalate_to_human(node_id: str, diagnostic_summary: str) -> str:
     """Scala il problema a un operatore umano."""

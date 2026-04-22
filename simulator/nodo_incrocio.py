@@ -88,6 +88,7 @@ class NodoIncrocio:
                     self.semafori[dir_name]["is_faulty"] = True
                 elif f_type == "REPAIR":
                     self.semafori[dir_name]["is_faulty"] = False
+                    self.semafori[dir_name]["offline_sent"] = False
                     s_id = self.semafori[dir_name]["id"]
                     if s_id in self.last_states:
                         del self.last_states[s_id]
@@ -114,6 +115,18 @@ class NodoIncrocio:
 
     def aggiorna_logica_luci(self):
         if not self.sim_active: return
+
+        # --- GRACEFUL DEGRADATION ---
+        any_faulty = any(s["is_faulty"] for s in self.semafori.values())
+        if any_faulty:
+            for d, s in self.semafori.items():
+                if s["is_faulty"]:
+                    s["stato"] = "OFFLINE" # Quello rotto muore davvero
+                else:
+                    s["stato"] = "GIALLO_LAMPEGGIANTE" # Gli altri si mettono in sicurezza
+            return
+        # ----------------------------
+
         self.tick_count += 1
         master = "NORD" if self.fase_attuale == "NORD_SUD" else "EST"
         limit = self.semafori[master]["green_duration"]
@@ -141,18 +154,24 @@ class NodoIncrocio:
 
         asse_attivo = ["NORD", "SUD"] if self.fase_attuale == "NORD_SUD" else ["EST", "OVEST"]
         for d, s in self.semafori.items():
-            if s["is_faulty"]: s["stato"] = "OFFLINE"
-            elif self.clearance_active: s["stato"] = "ROSSO"
+            if self.clearance_active: s["stato"] = "ROSSO"
             elif d in asse_attivo: s["stato"] = "GIALLO" if self.in_giallo else "VERDE_PRINCIPALE"
             else: s["stato"] = "ROSSO"
 
     def processa_traffico(self):
         if not self.sim_active: return
+
+        # --- GRACEFUL DEGRADATION ---
+        # Se l'incrocio è in Fail-Safe, il traffico si blocca
+        any_faulty = any(s["is_faulty"] for s in self.semafori.values())
+        if any_faulty:
+            return 
+        # ----------------------------
+
         ora = time.time()
         for d, s in self.semafori.items():
             if s["is_faulty"]: continue
-            intensita = 0.4 if (int(ora) % 60) < 20 else 0.1
-            if s["config"].get("is_border") and random.random() < (intensita/4):
+            if s["config"].get("is_border") and random.random() < 0.02:
                 self.genera_auto(d)
             for a in list(s["auto_in_arrivo"]):
                 if ora >= a["timestamp_arrivo"]:
@@ -214,17 +233,33 @@ class NodoIncrocio:
                 self.processa_traffico()    #
                 
                 # --- PUBBLICAZIONE STATO ---
+                ora_attuale = time.time()
+                # Creiamo il dizionario se non esiste (viene fatto una volta sola)
+                if not hasattr(self, 'last_heartbeat'): self.last_heartbeat = {}
+
                 for d, s in self.semafori.items():
+                    # 1. IL "DYING GASP" DEL NODO GUASTO
+                    if s["is_faulty"]:
+                        if not s.get("offline_sent", False):
+                            payload = {"colore": "OFFLINE", "auto_in_coda": 0, "green_duration": 0}
+                            self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
+                            s["offline_sent"] = True
+                        continue # Da questo momento in poi, silenzio assoluto per innescare il Watchdog
+
+                    # 2. NODI SANI E NODI IN GRACEFUL DEGRADATION
                     payload = {
                         "colore": s["stato"], 
                         "auto_in_coda": len(s["coda"]), 
                         "green_duration": s["green_duration"]
                     }
                     
-                    # Pubblichiamo SOLO se qualcosa è cambiato 
-                    if payload != self.last_states.get(s['id']): # <--- USA self.last_states
+                    ultimo_invio = self.last_heartbeat.get(s['id'], 0)
+                    
+                    # Pubblichiamo se lo stato è cambiato OPPURE ogni 10 secondi (Heartbeat)
+                    if payload != self.last_states.get(s['id']) or (ora_attuale - ultimo_invio) >= 10:
                         self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
-                        self.last_states[s['id']] = payload # <--- USA self.last_states
+                        self.last_states[s['id']] = payload
+                        self.last_heartbeat[s['id']] = ora_attuale
                 
                 # Respiro per la CPU per mantenere la sincronia temporale
                 time.sleep(1)

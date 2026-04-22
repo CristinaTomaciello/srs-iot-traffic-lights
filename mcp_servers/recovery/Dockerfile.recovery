@@ -1,11 +1,12 @@
 FROM python:3.10-slim
 WORKDIR /app
 
-# Installiamo socat per creare il ponte di comunicazione
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y socat && rm -rf /var/lib/apt/lists/*
-RUN pip install fastmcp docker paho-mqtt influxdb-client
+RUN pip install --no-cache-dir mcp fastmcp docker paho-mqtt influxdb-client
 COPY mcp_edge_recovery.py .
 EXPOSE 8000
 
-# Il ponte TCP: ascolta sulla 8000 e inoltra allo script Python in stdio
 CMD ["socat", "TCP-LISTEN:8000,fork,reuseaddr", "EXEC:'python -u mcp_edge_recovery.py'"]

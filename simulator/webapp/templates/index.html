@@ -36,7 +36,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            overflow: auto;
+            padding: 50px;
             width: 100%;
         }
 
@@ -155,6 +156,17 @@
             100% { opacity: 1; }
         }
         
+        .light-bulb.yellow-flash { 
+            background: #ffa502; 
+            box-shadow: 0 0 15px #ffa502;
+            animation: pulse-yellow 1s infinite;
+        }
+
+        @keyframes pulse-yellow {
+            0% { opacity: 1; }
+            50% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
 
         /* =========================================
            UI PANNELLO ADMIN A SCOMPARSA
@@ -194,10 +206,43 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            overflow-y: auto; 
         }
+
+        #admin-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        #admin-panel::-webkit-scrollbar-track {
+            background: #151b20; 
+        }
+        #admin-panel::-webkit-scrollbar-thumb {
+            background: #3742fa; /* Lo stesso blu dei bottoni */
+            border-radius: 4px;
+        }
+        #admin-panel::-webkit-scrollbar-thumb:hover {
+            background: #5352ed;
+        }
+
         #admin-panel.open {
             right: 0; /* Mostra il pannello */
         }
+
+        #map-wrapper {
+            position: relative;
+            background: var(--grass);
+            padding: 60px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            /* --- AGGIUNGI QUESTE 3 RIGHE --- */
+            cursor: grab; 
+            transition: transform 0.1s ease-out; /* Rende lo zoom fluido */
+            transform-origin: center center;
+        }
+        
+        #map-wrapper:active {
+            cursor: grabbing;
+        }
+
 
         .admin-header {
             display: flex;
@@ -266,8 +311,8 @@
         <div class="admin-section">
             <h3>Iniezione Traffico</h3>
             <div class="form-group">
-                <label>ID Incrocio (es. INC_0_0)</label>
-                <input type="text" id="inj-incrocio" placeholder="INC_0_0" value="INC_0_0">
+                <label>ID Incrocio</label>
+                <select id="inj-incrocio"></select>
             </div>
             <div class="form-group">
                 <label>Direzione Origine</label>
@@ -285,8 +330,8 @@
             <button class="btn btn-inject" onclick="injectCars()">INIETTA AUTO</button>
             <h3>Simulazione Guasti (Crash)</h3>
             <div class="form-group">
-                <label>ID Incrocio (es. INC_0_0)</label>
-                <input type="text" id="crash-incrocio" placeholder="INC_0_0" value="INC_0_0">
+                <label>ID Incrocio</label>
+                <select id="crash-incrocio"></select>
             </div>
             <div class="form-group">
                 <label>Semaforo da colpire</label>
