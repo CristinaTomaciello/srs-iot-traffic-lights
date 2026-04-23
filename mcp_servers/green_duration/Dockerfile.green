@@ -9,7 +9,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir mcp fastmcp paho-mqtt influxdb-client
-COPY mcp_green_duration.py .
+RUN mkdir -p simulator/utility
+COPY mcp_servers/green_duration/mcp_green_duration.py .
+COPY simulator/utility/influx_utils.py ./simulator/utility/
+RUN touch simulator/__init__.py simulator/utility/__init__.py
+
 EXPOSE 8001
 
 CMD ["socat", "TCP-LISTEN:8001,fork,reuseaddr", "EXEC:'python -u mcp_green_duration.py'"]
