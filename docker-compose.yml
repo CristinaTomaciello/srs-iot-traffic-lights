@@ -358,3 +358,35 @@ services:
     command: redis-server --save "" --appendonly no
     networks:
       - srs-net
+  
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: srs-portainer
+    command: -H unix:///var/run/docker.sock
+    ports:
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - srs-net
+    restart: always
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: srs-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - srs-net
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  portainer_data:
+  influxdb_alpha_data:
+  influxdb_beta_data:
+  grafana_data:

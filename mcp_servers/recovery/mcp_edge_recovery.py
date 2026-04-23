@@ -13,7 +13,7 @@ import paho.mqtt.client as mqtt
 import influxdb_client
 
 # Importiamo le utility e le costanti centralizzate
-from simulator.utility.influx_utils import query_with_failover, write_dual, INFLUX_BUCKET, INFLUX_ORG
+from simulator.utility.influx_utils import query_with_failover, write_dual, INFLUX_BUCKET, INFLUX_ORG, log_audit
 
 mcp = FastMCP("EdgeRecoveryMCP")
 
@@ -50,14 +50,18 @@ def connetti_mqtt_agente():
             print(f"[MCP_AGENT] Fallita connessione a {broker}: {e}", file=sys.stderr)
     return False
 
+def log_mcp(emoji, message):
+    print(f"[{id}] {emoji} {message}", file=sys.stderr, flush=True)
+
 connetti_mqtt_agente()
 
 # =======================================================
 # TOOL 1: TELEMETRIA (Usato dall'Orchestratore)
 # =======================================================
 @mcp.tool()
+@mcp.tool()
 def get_node_telemetry(node_id: str) -> str:
-    """Interroga InfluxDB tramite failover per lo stato del nodo."""
+    """Diagnosi rapida dello stato del nodo."""
     try:
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
@@ -66,27 +70,21 @@ def get_node_telemetry(node_id: str) -> str:
           |> filter(fn: (r) => r["direzione"] == "{node_id}") 
           |> last()
         """
-        
-        # USA IL FAILOVER: Prova Alpha, se fallisce prova Beta
         result = query_with_failover(query)
         
-        if not result or len(result) == 0:
-            return f"DIAGNOSI: Il nodo {node_id} non ha inviato dati recenti. Probabile OFFLINE critico."
+        if not result:
+            return f"STATO: {node_id} è OFFLINE (nessun dato)."
 
         record = result[0].records[0]
-        ts_ultimo = record.get_time().timestamp()
-        secondi_fa = int(time.time() - ts_ultimo)
+        secondi_fa = int(time.time() - record.get_time().timestamp())
+        status = "OK" if secondi_fa < 30 else "TIMEOUT"
         
-        status = "ONLINE" if secondi_fa < 30 else "OFFLINE_CRITICO"
-        
-        return (f"--- STATO NODO {node_id} ---\n"
-                f"Ultimo segnale: {secondi_fa} secondi fa\n"
-                f"Diagnosi: {status}\n"
-                f"Ultimo Colore: {record.get_value()}\n"
-                f"Auto in coda: {record.values.get('auto_in_coda', 0)}")
+        # Report ultra-compatto per l'IA
+        return f"NODO: {node_id} | STATO: {status} ({secondi_fa}s fa) | COLORE: {record.get_value()}"
         
     except Exception as e:
-        return f"ERRORE TELEMETRIA (Failover attivo): {str(e)}"
+        log_mcp("🔥", f"Errore telemetria: {e}")
+        return f"ERRORE: Database non raggiungibile."
 
 # =======================================================
 # TOOL 2: CONTROLLO AUDIT LOG (Usato dal Validatore)
@@ -125,46 +123,38 @@ def get_last_restart_time(node_id: str) -> str:
 # =======================================================
 @mcp.tool()
 def restart_edge_node(node_id: str) -> str:
-    """Invia comando MQTT e logga l'audit su entrambi i database (Dual-Write)."""
+    """Invia REPAIR e logga l'azione su Alpha e Beta."""
     if not is_mqtt_connected:
         if not connetti_mqtt_agente():
-            return "ERRORE: Impossibile raggiungere i bilanciatori MQTT."
+            return "ERRORE: MQTT Down."
 
     try:
-        # 1. Comando fisico MQTT
+        # 1. MQTT
         topic = f"srs/admin/node/{node_id}/fault_injection"
         mqtt_client.publish(topic, json.dumps({"type": "REPAIR"}), qos=1)
         
-        # 2. Creazione Point per Audit
+        # 2. AUDIT DUAL-WRITE
         point = influxdb_client.Point("agent_audit") \
             .tag("node_id", node_id) \
-            .field("action", "RESTART") \
-            .field("status", "success")
+            .field("action", "RESTART")
             
-        # 3. USA IL DUAL-WRITE: Scrive su Alpha e Beta in parallelo
-        # Usiamo synchronous=True perché in un'operazione di recovery vogliamo la conferma
-        successo_scrittura = write_dual(point, synchronous=True)
+        successo = write_dual(point, synchronous=True)
         
-        time.sleep(1)
-        
-        audit_msg = "e registrato correttamente." if successo_scrittura else "ma registrazione audit FALLITA."
-        return f"SUCCESSO: Riavvio inviato a {node_id} {audit_msg}"
+        log_mcp("🛠️", f"Riavvio inviato a {node_id}. Audit: {'✅' if successo else '❌'}")
+        log_audit("RECOVERY_MCP", "EXECUTE_REPAIR", f"Restart inviato a {node_id}", level="INFO")
+        return f"SUCCESSO: Nodo {node_id} riavviato."
 
     except Exception as e:
-        return f"ERRORE CRITICO: {str(e)}"
+        log_mcp("💥", f"Fallimento restart: {e}")
+        return "ERRORE CRITICO nell'esecuzione."
 
 # =======================================================
 # TOOL 4: ESCALATION
 # =======================================================
 @mcp.tool()
 def escalate_to_human(node_id: str, diagnostic_summary: str) -> str:
-    """Scala il problema a un operatore umano."""
-    print("\n" + "="*60, file=sys.stderr)
-    print("ESCALATION UMANA RICHIESTA DALL'AGENTE 🚨", file=sys.stderr)
-    print(f"NODO COINVOLTO: {node_id}", file=sys.stderr)
-    print(f"ANALISI: {diagnostic_summary}", file=sys.stderr)
-    print("="*60 + "\n", file=sys.stderr, flush=True)
-    return "ESCALATION COMPLETATA. Il controllo è passato all'umano."
-
+    """Passa il controllo all'operatore."""
+    log_mcp("🚨", f"ESCALATION RICHIESTA per {node_id}: {diagnostic_summary}")
+    return "ESCALATION COMPLETATA."
 if __name__ == "__main__":
     mcp.run()
