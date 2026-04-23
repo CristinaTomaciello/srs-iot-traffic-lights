@@ -52,6 +52,7 @@ class NodoIncrocio:
     def on_connect(self, client, userdata, flags, rc, properties):
         if rc == 0:
             self.mqtt_connected = True
+            log_node(self.id, "🌐", "Connesso al broker.")
             self.client.subscribe("srs/admin/control")
             for s in self.semafori.values():
                 self.client.subscribe(f"srs/edge/{s['id']}/inbox_auto")
@@ -59,7 +60,7 @@ class NodoIncrocio:
                 self.client.subscribe(f"srs/admin/node/{s['id']}/fault_injection")
             self.client.subscribe(f"srs/admin/inject/{self.id}")
         else:
-            print(f"[{self.id}] EMQX ha rifiutato la connessione, codice: {rc}")
+            log_node(self.id, "❌", f"Connessione rifiutata (rc: {rc})")
 
     def is_connected(self):
         return self.mqtt_connected
@@ -70,22 +71,26 @@ class NodoIncrocio:
     def on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode())
+            
+            # 1. CONTROLLO SIMULAZIONE (Log solo al cambio stato)
             if msg.topic == "srs/admin/control":
                 nuovo_stato = (payload.get("command") == "START")
                 if nuovo_stato and not self.sim_active:
+                    log_node(self.id, "🚀", "Simulazione AVVIATA.")
                     self.timer_fase = 0
                     self.in_giallo = False
+                elif not nuovo_stato and self.sim_active:
+                    log_node(self.id, "⏸️", "Simulazione in PAUSA.")
                 self.sim_active = nuovo_stato
+
+            # 2. GESTIONE GUASTI E RIPRISTINI (Log con Emoji)
             elif "fault_injection" in msg.topic:
                 dir_name = msg.topic.split("/")[3].split("_")[-1]
                 f_type = payload.get("type")
                 
-                if f_type == "SOFTWARE_CRASH":
-                    # Invece di os._exit(1), "congeliamo" solo questa direzione
+                if f_type in ["SOFTWARE_CRASH", "HARDWARE_FAILURE"]:
                     self.semafori[dir_name]["is_faulty"] = True
-                    print(f"[{self.id}] SOFTWARE CRASH simulato per {dir_name}")
-                elif f_type == "HARDWARE_FAILURE":
-                    self.semafori[dir_name]["is_faulty"] = True
+                    log_node(self.id, "💀", f"GUASTO rilevato su {dir_name} ({f_type}).")
                 elif f_type == "REPAIR":
                     self.semafori[dir_name]["is_faulty"] = False
                     self.semafori[dir_name]["offline_sent"] = False
@@ -96,20 +101,25 @@ class NodoIncrocio:
                     self.tick_count = 0
                     self.in_giallo = False
                     self.clearance_active = False
-                    print(f"[{self.id}] REPAIR eseguito su {dir_name}. Ciclo resettato.")
+                    log_node(self.id, "🔧", f"REPAIR eseguito su {dir_name}. Ripristino telemetria.")
+
+            # 3. CONFIGURAZIONE E TRAFFICO (Silenziosi per evitare spam)
             elif "config" in msg.topic:
                 dir_name = msg.topic.split("/")[2].split("_")[-1]
                 self.semafori[dir_name]["green_duration"] = int(payload["green_duration"])
                 self.semafori[dir_name]["override_cycles"] = int(payload.get("override_cycles", 1))
+
             elif "inbox_auto" in msg.topic:
                 dir_name = msg.topic.split("/")[2].split("_")[-1]
                 self.semafori[dir_name]["auto_in_arrivo"].append(payload)
+
             elif f"srs/admin/inject/{self.id}" == msg.topic:
                 d = payload.get("direzione")
-                if d in self.semafori: self.genera_auto(d, payload.get("count", 1))
-        except Exception as e: 
-            print(f"[{self.id}] ⚠️ Errore elaborazione MQTT su {msg.topic}: {e}", flush=True)
-            traceback.print_exc()
+                if d in self.semafori: 
+                    self.genera_auto(d, payload.get("count", 1))
+
+        except Exception:
+            pass
 
     def genera_auto(self, dir_name, count=1):
         s = self.semafori[dir_name]
@@ -212,48 +222,35 @@ class NodoIncrocio:
                         self.client.publish(f"srs/edge/{target_info['target']}/inbox_auto", json.dumps(auto))
 
     def run(self):
-        """
-        Ciclo principale dell'incrocio: gestisce la connessione e la simulazione.
-        """
         # --- CONNESSIONE INIZIALE ---
-        # Deleghiamo tutto al modulo esterno 'mqtt_utils'
         connetti_con_failover(self.client, self.id, self.is_connected)
-        
-        # Una volta connessi, dichiariamo la presenza al sistema
         self.client.publish(f"srs/status/incrocio/{self.id}", "ONLINE", qos=1, retain=True)
-
-        # Memoria locale per evitare di inviare dati identici (Anti-Spam)
-        last_states = {}
+        log_node(self.id, "🌐", "Nodo operativo e registrato al sistema.")
 
         try:
             while True:
-                # --- MONITORAGGIO FAILOVER ---
-                # Se la connessione cade, invochiamo di nuovo la logica rotante sui broker
+                # --- MONITORAGGIO FAILOVER (Log solo all'evento) ---
                 if not self.mqtt_connected:
-                    print(f"[{self.id}] Rilevata disconnessione! Avvio recupero su broker di scorta...", flush=True)
+                    log_node(self.id, "⚠️", "Connessione persa. Avvio procedura di failover...")
                     connetti_con_failover(self.client, self.id, self.is_connected)
-                    # Ri-pubblichiamo lo stato online sul nuovo broker
                     self.client.publish(f"srs/status/incrocio/{self.id}", "ONLINE", qos=1, retain=True)
 
-                # --- LOGICA DI SIMULAZIONE ---
-                self.aggiorna_logica_luci() #
-                self.processa_traffico()    #
+                self.aggiorna_logica_luci()
+                self.processa_traffico()
                 
-                # --- PUBBLICAZIONE STATO ---
                 ora_attuale = time.time()
-                # Creiamo il dizionario se non esiste (viene fatto una volta sola)
                 if not hasattr(self, 'last_heartbeat'): self.last_heartbeat = {}
 
                 for d, s in self.semafori.items():
-                    # 1. IL "DYING GASP" DEL NODO GUASTO
+                    # 1. DYING GASP (Silenzioso nel log, l'alert è gestito dal Controller)
                     if s["is_faulty"]:
                         if not s.get("offline_sent", False):
                             payload = {"colore": "OFFLINE", "auto_in_coda": 0, "green_duration": 0}
                             self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
                             s["offline_sent"] = True
-                        continue # Da questo momento in poi, silenzio assoluto per innescare il Watchdog
+                        continue
 
-                    # 2. NODI SANI E NODI IN GRACEFUL DEGRADATION
+                    # 2. PUBBLICAZIONE TELEMETRIA (Senza log a video)
                     payload = {
                         "colore": s["stato"], 
                         "auto_in_coda": len(s["coda"]), 
@@ -262,18 +259,20 @@ class NodoIncrocio:
                     
                     ultimo_invio = self.last_heartbeat.get(s['id'], 0)
                     
-                    # Pubblichiamo se lo stato è cambiato OPPURE ogni 10 secondi (Heartbeat)
+                    # Pubblichiamo solo se lo stato è cambiato o ogni 10s (Heartbeat)
                     if payload != self.last_states.get(s['id']) or (ora_attuale - ultimo_invio) >= 10:
                         self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
                         self.last_states[s['id']] = payload
                         self.last_heartbeat[s['id']] = ora_attuale
                 
-                # Respiro per la CPU per mantenere la sincronia temporale
                 time.sleep(1)
 
         except Exception as e:
-            print(f"[{self.id}] ERRORE FATALE NEL CICLO RUN: {e}", flush=True)
-            traceback.print_exc()
+            log_node(self.id, "🔥", f"ERRORE CRITICO: {e}")
+
+def log_node(node_id, emoji, message):
+    # Usiamo flush=True per garantire la sincronia in Portainer
+    print(f"[{node_id}] {emoji} {message}", flush=True)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

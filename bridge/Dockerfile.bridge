@@ -1,8 +1,19 @@
 FROM python:3.10-slim
-RUN pip install --no-cache-dir paho-mqtt requests
+
+# Installiamo tutte le librerie necessarie, inclusa influxdb-client per i log audit
+RUN pip install --no-cache-dir paho-mqtt requests influxdb-client redis
+
 WORKDIR /app
+
+# Copiamo l'intero progetto per permettere gli import cross-folder (es. simulator.utility)
 COPY . .
+
+# Fondamentale per far trovare a Python il modulo 'simulator' dalla cartella 'bridge'
 ENV PYTHONPATH=/app
+
+# Variabili d'ambiente (verranno sovrascritte dal docker-compose.yml se presenti)
 ENV MQTT_BROKER="mosquitto"
 ENV OPENCODE_URL="http://brain_server:4096"
+
+# Avvio del bridge in modalità unbuffered per vedere i log emoji in tempo reale
 CMD ["python", "-u", "bridge/bridge_service.py"]

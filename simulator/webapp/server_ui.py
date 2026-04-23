@@ -56,13 +56,15 @@ def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     if rc == 0:
         is_mqtt_connected = True
-        print("[UI_CLIENT] UI connessa al broker MQTT in HA!", flush=True)
+        log_ui("🌐", "Connessione stabilita con il cluster MQTT.")
         client.subscribe("srs/edge/+/+/stato")
+    else:
+        log_ui("❌", f"Connessione rifiutata (rc: {rc})")
 
 def on_disconnect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     is_mqtt_connected = False
-    print("[UI_CLIENT] Disconnesso dal broker!", flush=True)
+    log_ui("⚠️", "Connessione al broker persa.")
 
 def check_ui_connection():
     global is_mqtt_connected
@@ -86,10 +88,14 @@ def on_message(client, userdata, msg):
                 "id": f"{incrocio_id}_{direzione}"
             }
             
+            # Invio ai websocket (Silenzioso, non logghiamo ogni pacchetto dati)
             for connection in connessioni_attive:
                 asyncio.run_coroutine_threadsafe(connection.send_json(data_for_ui), loop)
     except Exception:
         pass
+
+def log_ui(emoji, message):
+    print(f"[UI-SERVER] {emoji} {message}", flush=True)
 
 # --- Inizializzazione Client MQTT ---
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="UI_CLIENT")
@@ -99,18 +105,15 @@ mqtt_client.on_message = on_message
 
 # --- Thread di Failover in Background ---
 def mqtt_monitor():
-    """
-    Gira in background per tenere in vita la connessione MQTT 
-    senza bloccare il server web asincrono di FastAPI.
-    """
-    print("Inizializzazione della UI e connessione ai bilanciatori...", flush=True)
+    """Gestisce il mantenimento della connessione senza spam."""
+    log_ui("🔌", "Inizializzazione monitor di rete...")
     utils.connetti_con_failover(mqtt_client, "UI_CLIENT", check_ui_connection)
     
     while True:
         if not check_ui_connection():
-            print("[UI_CLIENT] Connessione persa! Rotazione verso il bilanciatore secondario...", flush=True)
+            log_ui("🔄", "Failover in corso: tentativo di riconnessione al broker secondario...")
             utils.connetti_con_failover(mqtt_client, "UI_CLIENT", check_ui_connection)
-        time.sleep(1)
+        time.sleep(2)
 
 # --- Modelli Pydantic ---
 class ControlCommand(BaseModel):
@@ -143,6 +146,7 @@ async def get_topology():
 @app.post("/api/admin/control")
 async def admin_control(cmd: ControlCommand):
     mqtt_client.publish("srs/admin/control", json.dumps({"command": cmd.command}), retain=True)
+    log_ui("⌨️", f"Comando globale inviato: {cmd.command}")
     return {"status": "ok"}
 
 @app.post("/api/admin/inject")
@@ -150,6 +154,7 @@ async def admin_inject(inj: InjectCommand):
     topic = f"srs/admin/inject/{inj.incrocio}"
     payload = {"direzione": inj.direzione, "count": inj.count}
     mqtt_client.publish(topic, json.dumps(payload))
+    log_ui("🚗", f"Iniezione traffico: {inj.count} auto su {inj.incrocio}_{inj.direzione}")
     return {"status": "ok"}
 
 @app.websocket("/ws")
@@ -178,20 +183,14 @@ async def shutdown_event():
 
 @app.post("/api/admin/crash")
 async def admin_crash(cmd: CrashCommand):
-    # Formatta esattamente come fa scenario_manager.py
     incrocio = cmd.incrocio.strip().upper()
-    if not incrocio.startswith("INC_"):
-        incrocio = "INC_" + incrocio
-        
+    if not incrocio.startswith("INC_"): incrocio = "INC_" + incrocio
     direzione = cmd.direzione.strip().upper()
     node_id = f"{incrocio}_{direzione}"
     
-    # Topic e payload identici a scenario_manager.py
     topic = f"srs/admin/node/{node_id}/fault_injection"
-    payload = {"type": "HARDWARE_FAILURE"}
-    
-    mqtt_client.publish(topic, json.dumps(payload))
-    print(f"[UI ADMIN] 💥 HARDWARE_FAILURE inviato a {node_id}")
+    mqtt_client.publish(topic, json.dumps({"type": "HARDWARE_FAILURE"}))
+    log_ui("💥", f"Comando CRASH inviato a {node_id}")
     return {"status": "ok"}
 
 if __name__ == "__main__":

@@ -28,3 +28,20 @@ def write_dual(point, synchronous=True):
         except Exception:
             continue
     return success
+
+def log_audit(component, event_type, message, level="INFO"):
+    """
+    Scrive un log strutturato su entrambi i database (Alpha e Beta).
+    Utilizzalo per tracciare le decisioni dell'IA.
+    """
+    try:
+        point = influxdb_client.Point("system_logs") \
+            .tag("component", component) \
+            .tag("level", level) \
+            .tag("event", event_type) \
+            .field("message", str(message))
+        
+        # Scrittura ridondata (Dual-Write)
+        write_dual(point, synchronous=False)
+    except Exception as e:
+        print(f"Errore scrittura log audit: {e}")
