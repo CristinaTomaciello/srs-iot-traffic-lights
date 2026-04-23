@@ -5,8 +5,14 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y socat && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir mcp fastmcp docker paho-mqtt influxdb-client
-COPY mcp_edge_recovery.py .
+
+RUN mkdir -p simulator/utility
+COPY mcp_servers/recovery/mcp_edge_recovery.py .
+COPY simulator/utility/influx_utils.py ./simulator/utility/
+RUN touch simulator/__init__.py simulator/utility/__init__.py
+
 EXPOSE 8000
 
 CMD ["socat", "TCP-LISTEN:8000,fork,reuseaddr", "EXEC:'python -u mcp_edge_recovery.py'"]

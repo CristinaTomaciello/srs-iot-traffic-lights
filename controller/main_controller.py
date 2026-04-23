@@ -2,16 +2,17 @@ import paho.mqtt.client as mqtt
 import json
 import influxdb_client
 import time
-from influxdb_client.client.write_api import ASYNCHRONOUS, WriteOptions
 import sys
 import os
 import uuid
 import threading
 import redis
 
-# path per le utility
+# 1. CONFIGURAZIONE PERCORSI E UTILITY
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import simulator.utility.mqtt_utils as utils
+# Importiamo la logica di scrittura ridondata e le costanti
+from simulator.utility.influx_utils import write_dual, INFLUX_BUCKET, INFLUX_ORG
 
 # --- IDENTIFICATIVO E REDLOCK ---
 MIO_NODE_ID = os.environ.get("NODE_NAME", f"NODO-{uuid.uuid4().hex[:4].upper()}")
@@ -23,17 +24,7 @@ HEARTBEAT_TOPIC = "srs/system/survival_heartbeat"
 ero_gia_leader = False
 ultimo_heartbeat_leader_ricevuto = time.time()
 
-# --- CONFIGURAZIONE INFLUXDB ---
-INFLUX_URL = "http://influxdb:8086"
-INFLUX_TOKEN = "supersecrettoken123"
-INFLUX_ORG = "srs_org"
-INFLUX_BUCKET = "traffic_data"
-
-db_client = influxdb_client.InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-opzioni_asincrone = WriteOptions(batch_size=50, flush_interval=1000, jitter_interval=0, retry_interval=5000)
-write_api = db_client.write_api(write_options=opzioni_asincrone)
-
-# --- CONNESSIONI REDIS (Timeout bassissimi per non bloccarsi) ---
+# --- CONNESSIONI REDIS ---
 redis_nodes = [
     redis.Redis(host='redis-lock-1', port=6379, db=0, decode_responses=True, socket_timeout=1),
     redis.Redis(host='redis-lock-2', port=6379, db=0, decode_responses=True, socket_timeout=1),
@@ -69,7 +60,6 @@ def on_message(client, userdata, msg):
         if msg.topic == HEARTBEAT_TOPIC:
             sender_id = msg.payload.decode('utf-8')
             ultimo_heartbeat_leader_ricevuto = time.time()
-            # Esorcismo: se mi credo leader ma sento un altro leader, mi dimetto!
             if ero_gia_leader and sender_id != MIO_NODE_ID:
                 print(f"[{MIO_NODE_ID}] ⚠️ SPLIT-BRAIN EVITATO! Nodo {sender_id} è il vero Leader. Mi dimetto.")
                 ero_gia_leader = False
@@ -101,14 +91,13 @@ def on_message(client, userdata, msg):
         if incrocio_id not in global_state:
             global_state[incrocio_id] = {}
         
-        # Aggiorniamo la RAM per TUTTI i nodi (così la panchina è sempre pronta)
         global_state[incrocio_id][semaforo_id] = {
             "dati": dati_semaforo,
             "last_seen": time.time(),
             "alert_sent": False
         }
 
-        # Scrittura su InfluxDB (SOLO IL LEADER DEVE SCRIVERE PER EVITARE DOPPIONI)
+        # <<< NOVITÀ: SCRITTURA RIDONDATA TRAMITE UTILITY >>>
         if ero_gia_leader:
             punto_storico = influxdb_client.Point("stato_traffico") \
                 .tag("incrocio", incrocio_id) \
@@ -117,7 +106,8 @@ def on_message(client, userdata, msg):
                 .field("colore", dati_semaforo.get('colore', 'UNKNOWN')) \
                 .field("durata_verde", int(dati_semaforo.get('green_duration', 0)))
             
-            write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=punto_storico)
+            # Scrittura asincrona per massimizzare le performance del controller
+            write_dual(punto_storico, synchronous=False)
         
     except json.JSONDecodeError:
         pass
@@ -128,7 +118,7 @@ def on_message(client, userdata, msg):
 def on_disconnect(client, userdata, flags, rc, properties):
     global is_mqtt_connected, ero_gia_leader
     is_mqtt_connected = False
-    ero_gia_leader = False # Perdo la leadership se cado
+    ero_gia_leader = False
     print(f"[{MIO_NODE_ID}] Connessione persa! Avvio failover...")
 
 def check_controller_connection():
@@ -138,8 +128,6 @@ def check_controller_connection():
 def valuta_leadership(client_mqtt):
     global ero_gia_leader
     voti_favorevoli = 0
-    
-    # Tentativo su tutti i Redis
     for r in redis_nodes:
         try:
             leader_attuale = r.get(LOCK_KEY)
@@ -150,32 +138,28 @@ def valuta_leadership(client_mqtt):
                 if r.set(LOCK_KEY, MIO_NODE_ID, nx=True, ex=LOCK_TTL):
                     voti_favorevoli += 1
         except Exception:
-            pass # Nodo offline
+            pass
 
-    # A: Quorum Raggiunto Standard
     if voti_favorevoli >= 2:
         ero_gia_leader = True
         client_mqtt.publish(HEARTBEAT_TOPIC, MIO_NODE_ID, qos=0)
         return True
 
-    # B: Survival Mode (Niente DB, ma ero già io il leader)
     if voti_favorevoli < 2 and ero_gia_leader:
-        print(f"[{MIO_NODE_ID}] 🔴 ALLARME DB: Quorum perso! Continuo in SURVIVAL MODE.")
+        print(f"[{MIO_NODE_ID}] 🔴 ALLARME QUORUM: Persa connessione a Redis! Continuo in SURVIVAL MODE.")
         client_mqtt.publish(HEARTBEAT_TOPIC, MIO_NODE_ID, qos=0)
         return True
 
-    # C: Usurpazione di Emergenza (Niente DB, ero in panchina, il leader tace)
     tempo_silenzio = time.time() - ultimo_heartbeat_leader_ricevuto
     if voti_favorevoli < 2 and not ero_gia_leader:
         if tempo_silenzio > 12: 
-            print(f"[{MIO_NODE_ID}] ⚡ USURPAZIONE! DB offline e Leader sparito. Prendo il comando!")
+            print(f"[{MIO_NODE_ID}] ⚡ USURPAZIONE! Leader sparito. Prendo il comando!")
             ero_gia_leader = True
             client_mqtt.publish(HEARTBEAT_TOPIC, MIO_NODE_ID, qos=0)
             return True
         else:
             return False
 
-    # D: Fallback
     ero_gia_leader = False
     return False
 
@@ -195,18 +179,13 @@ try:
         if not check_controller_connection():
             utils.connetti_con_failover(client, f"CTRL_{MIO_NODE_ID}", check_controller_connection)
 
-        # 1. VALUTAZIONE LEADERSHIP E WATCHDOG (Eseguito ogni secondo)
         if valuta_leadership(client):
-            
-            # --- SEZIONE LEADER ATTIVO ---
-            # Heartbeat di sistema standard
             if ora_attuale - last_heartbeat_time >= HEARTBEAT_INTERVAL:
                 heartbeat_payload = {"component": "main_controller", "status": "ONLINE", "leader_id": MIO_NODE_ID, "uptime": int(ora_attuale - start_time)}
                 client.publish("srs/controller/heartbeat", json.dumps(heartbeat_payload), qos=0)
                 last_heartbeat_time = ora_attuale
 
             if is_simulation_active:
-                # Watchdog Hardware
                 for inc_id, semafori in global_state.items():
                     for sem_id, info in semafori.items():
                         secondi_silenzio = ora_attuale - info["last_seen"]
@@ -217,25 +196,23 @@ try:
                             }
                             client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
                             info["alert_sent"] = True
-                            print(f"[WATCHDOG-HW] Nodo {sem_id} silente da {int(secondi_silenzio)}s. Segnale inviato.")
 
-                # Watchdog Traffico
                 if ora_attuale - last_traffic_check_time >= TRAFFIC_CHECK_INTERVAL:
                     traffic_payload = {"event": "PROACTIVE_TRAFFIC_CHECK", "timestamp": ora_attuale}
                     client.publish("srs/alerts/traffic_check", json.dumps(traffic_payload), qos=1)
                     last_traffic_check_time = ora_attuale
-                    print(f"[{MIO_NODE_ID}] [WATCHDOG-TRAFFICO] Segnale di ronda inviato.")
+            
             if int(ora_attuale) % 10 == 0:
-                print(f"[{MIO_NODE_ID}] 👑 Sono il Leader. Stato attuale: {len(global_state)} incroci monitorati.")
+                print(f"[{MIO_NODE_ID}] 👑 Sono il Leader. Monitorando {len(global_state)} incroci.")
         else:
-            # --- SEZIONE PANCHINA (Standby) ---
             if int(ora_attuale) % 10 == 0:
                 print(f"[{MIO_NODE_ID}] 💤 In Standby. Ascolto il Leader")
 
-        time.sleep(1) # Un battito al secondo è un buon ritmo per il loop principale
+        time.sleep(1)
 
 except KeyboardInterrupt:
     print("\nSpegnimento del Controller in corso...")
     client.loop_stop()
     client.disconnect()
-    db_client.close()
+    # Non è più necessario chiudere manualmente i client Influx qui, 
+    # poiché l'utility usa il context manager 'with' per ogni scrittura.

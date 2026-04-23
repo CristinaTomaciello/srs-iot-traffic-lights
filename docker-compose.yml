@@ -5,9 +5,9 @@ networks:
 
 
 services:
-  influxdb:
+  semafori-tsdb-alpha:
     image: influxdb:2.7
-    container_name: semafori-tsdb
+    container_name: semafori-tsdb-1
     networks:
       - srs-net
     ports:
@@ -19,10 +19,27 @@ services:
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
-      - DOCKER_INFLUXDB_INIT_RETENTION=1d
     volumes:
-      - ./influxdb_data:/var/lib/influxdb2
-      - ./dashboards:/docker-entrypoint-initdb.d
+      - ./influxdb_alpha_data:/var/lib/influxdb2
+    restart: unless-stopped
+
+  # --- DATABASE BETA ---
+  semafori-tsdb-beta:
+    image: influxdb:2.7
+    container_name: semafori-tsdb-2
+    networks:
+      - srs-net
+    ports:
+      - "8087:8086" # Porta esterna diversa per evitare conflitti
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+      - DOCKER_INFLUXDB_INIT_ORG=srs_org
+      - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
+    volumes:
+      - ./influxdb_beta_data:/var/lib/influxdb2
     restart: unless-stopped
 
 
@@ -67,7 +84,8 @@ services:
     networks:
       - srs-net
     depends_on:
-      - influxdb
+      - semafori-tsdb-alpha
+      - semafori-tsdb-beta
       - haproxy-1
       - haproxy-2
       - redis-lock-1
@@ -85,7 +103,8 @@ services:
     networks:
       - srs-net
     depends_on:
-      - influxdb
+      - semafori-tsdb-alpha
+      - semafori-tsdb-beta
       - haproxy-1
       - haproxy-2
       - redis-lock-1
@@ -269,8 +288,8 @@ services:
 
   mcp-recovery-service:
     build:
-      context: ./mcp_servers/recovery
-      dockerfile: Dockerfile.recovery
+      context: .
+      dockerfile: mcp_servers/recovery/Dockerfile.recovery
     networks:
       - srs-net
     expose:
@@ -282,7 +301,9 @@ services:
         condition: service_started
       haproxy-2:
         condition: service_started
-      influxdb:
+      semafori-tsdb-alpha:
+        condition: service_started
+      semafori-tsdb-beta:
         condition: service_started
     healthcheck:
       test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8000))" || kill 1
@@ -296,8 +317,8 @@ services:
 
   mcp-green-duration-service:
     build:
-      context: ./mcp_servers/green_duration
-      dockerfile: Dockerfile.green
+      context: .
+      dockerfile: mcp_servers/green_duration/Dockerfile.green
     networks:
       - srs-net
     expose:
@@ -309,7 +330,9 @@ services:
         condition: service_started
       haproxy-2:
         condition: service_started
-      influxdb:
+      semafori-tsdb-alpha:
+        condition: service_started
+      semafori-tsdb-beta:
         condition: service_started
     healthcheck:
       test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8001))" || kill 1

@@ -23,8 +23,8 @@ influxdb/data/
 influxdb/config/
 
 # Ignora i dati locali del database
-influxdb_data/
-
+influxdb_alpha_data/
+influxdb_beta_data/
 # Log creati dal simulatore
 simulator/simulator.log
 
