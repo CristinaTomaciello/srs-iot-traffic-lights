@@ -19,7 +19,11 @@ MY_NAME = f"BRIDGE_{WORKER_ID}"
 
 # Configurazione endpoint
 MQTT_BROKER = os.getenv("MQTT_BROKER", "haproxy-1")
-OPENCODE_URL = os.getenv("OPENCODE_URL", "http://brain_server:4096")
+OPENCODE_URLS = [
+    os.getenv("OPENCODE_URL_1", "http://haproxy-ai-1:4096"),
+    os.getenv("OPENCODE_URL_2", "http://haproxy-ai-2:4096")
+]
+current_ai_host_index = 0
 OPENCODE_AUTH = (os.getenv("OPENCODE_USER", "opencode"), os.getenv("OPENCODE_PASS", "srs"))
 
 # Stato della connessione per l'utility di failover
@@ -30,20 +34,38 @@ hardware_queue = queue.Queue()
 traffic_queue = queue.Queue()
 traffic_agent_busy = False
 
+def post_with_failover(endpoint_path, json_data, auth, timeout):
+    """Esegue una POST HTTP provando i bilanciatori IA a rotazione in caso di crash."""
+    global current_ai_host_index
+    tentativi = 0
+    
+    while tentativi < len(OPENCODE_URLS):
+        base_url = OPENCODE_URLS[current_ai_host_index]
+        full_url = f"{base_url}{endpoint_path}"
+        try:
+            response = requests.post(full_url, json=json_data, auth=auth, timeout=timeout)
+            return response
+        except requests.exceptions.RequestException as e:
+            print(f"[{MY_NAME}] ⚠️ Errore su {base_url}: {e}. Tento failover IA...", flush=True)
+            current_ai_host_index = (current_ai_host_index + 1) % len(OPENCODE_URLS)
+            tentativi += 1
+            
+    raise Exception("Tutti i bilanciatori IA sono offline o irraggiungibili!")
+
+
 def send_to_agent_isolated(agent_name, message_text, prefix="[BRIDGE]"):
-    """Crea una sessione isolata nell'LLM per evitare inquinamento del contesto."""
+    """Crea una sessione isolata nell'LLM usando il failover HTTP."""
     try:
-        url_session = f"{OPENCODE_URL}/session"
         payload_session = {"title": f"Task: {agent_name} su {MY_NAME}"}
-        s_res = requests.post(url_session, json=payload_session, auth=OPENCODE_AUTH, timeout=10)
+        # Sostituito requests.post con post_with_failover
+        s_res = post_with_failover("/session", payload_session, OPENCODE_AUTH, 10)
         
         if s_res.status_code == 200:
             sid = s_res.json().get("id")
-            url_message = f"{OPENCODE_URL}/session/{sid}/message"
             payload_msg = {"agent": agent_name, "parts": [{"type": "text", "text": message_text}]}
             
-            # Timeout lungo perché l'IA può essere lenta a rispondere
-            res = requests.post(url_message, json=payload_msg, auth=OPENCODE_AUTH, timeout=300)
+            # Sostituito requests.post con post_with_failover
+            res = post_with_failover(f"/session/{sid}/message", payload_msg, OPENCODE_AUTH, 300)
             
             if res.status_code == 200:
                 for part in res.json().get("parts", []):
@@ -56,7 +78,6 @@ def send_to_agent_isolated(agent_name, message_text, prefix="[BRIDGE]"):
             
     except Exception as e: 
         print(f"{prefix} [{MY_NAME}] Timeout o fallimento chiamata: {e}", flush=True)
-
 # --- WORKERS ---
 
 def hardware_worker():
@@ -135,12 +156,15 @@ client.on_message = on_message
 client.on_disconnect = on_disconnect
 
 # Attesa OpenCode
-print(f"[{MY_NAME}] Controllo disponibilità OpenCode...", flush=True)
+print(f"[{MY_NAME}] Controllo disponibilità bilanciatori IA...", flush=True)
 while True:
     try:
-        requests.get(OPENCODE_URL, timeout=3) 
+        # Basta che uno dei due HAProxy risponda per dichiarare l'IA pronta
+        requests.get(OPENCODE_URLS[current_ai_host_index], timeout=3) 
         break
     except Exception:
+        print(f"[{MY_NAME}] IA non ancora pronta. Riprovo...", flush=True)
+        current_ai_host_index = (current_ai_host_index + 1) % len(OPENCODE_URLS)
         time.sleep(5)
 
 # Loop principale con failover HAProxy

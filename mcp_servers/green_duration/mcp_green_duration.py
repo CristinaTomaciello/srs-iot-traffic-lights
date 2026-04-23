@@ -4,7 +4,7 @@ import influxdb_client
 import json
 import time
 import sys
-import uuid  # <-- Aggiunto per generare ID univoci
+import uuid
 
 mcp = FastMCP("TrafficOptimizerMCP")
  

@@ -5,6 +5,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 import json
 import time
 import sys
+import uuid
 
 mcp = FastMCP("EdgeRecoveryMCP")
 
@@ -26,7 +27,8 @@ def on_disconnect(client, userdata, flags, rc, properties):
     is_mqtt_connected = False
     print("[MCP_AGENT] Disconnesso dal broker MQTT!", file=sys.stderr, flush=True)
 
-mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="MCP_RECOVERY_AGENT")
+id = f"MCP_RECOVERY_{uuid.uuid4().hex[:6]}"
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=id)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_disconnect = on_disconnect
 
@@ -96,7 +98,7 @@ def get_node_telemetry(node_id: str) -> str:
 # =======================================================
 @mcp.tool()
 def get_last_restart_time(node_id: str) -> str:
-    """Controlla l'Audit Log per verificare da quanti secondi è stato eseguito l'ultimo riavvio su questo nodo."""
+    """Restituisce UNICAMENTE i secondi trascorsi dall'ultimo riavvio per questo specifico nodo."""
     try:
         client = influxdb_client.InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
         query_api = client.query_api()
@@ -114,17 +116,17 @@ def get_last_restart_time(node_id: str) -> str:
         client.close()
         
         if not result:
-            # Ritorna un valore altissimo sicuro se il nodo non è mai stato riavviato
-            return f"Nessun riavvio registrato per {node_id}. (seconds_since_last_restart: 999999)"
+            return '{"node": "' + node_id + '", "seconds_since_last_restart": 999999, "can_restart": true}'
 
         record = result[0].records[0]
-        ts_ultimo_restart = record.get_time().timestamp()
-        secondi_fa = int(time.time() - ts_ultimo_restart)
+        secondi_fa = int(time.time() - record.get_time().timestamp())
+        
+        can_restart = "true" if secondi_fa > 60 else "false"
 
-        return f"L'ultimo riavvio per {node_id} è avvenuto {secondi_fa} secondi fa. (seconds_since_last_restart: {secondi_fa})"
+        return '{"node": "' + node_id + '", "seconds_since_last_restart": ' + str(secondi_fa) + ', "can_restart": ' + can_restart + '}'
         
     except Exception as e:
-        return f"ERRORE AUDIT DB: {str(e)}"
+        return f'{{"error": "{str(e)}"}}'
 
 # =======================================================
 # TOOL 3: ESECUZIONE (Usato dal Recovery Agent)
