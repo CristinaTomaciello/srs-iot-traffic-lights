@@ -92,6 +92,11 @@ class NodoIncrocio:
                     s_id = self.semafori[dir_name]["id"]
                     if s_id in self.last_states:
                         del self.last_states[s_id]
+                    
+                    self.tick_count = 0
+                    self.in_giallo = False
+                    self.clearance_active = False
+                    print(f"[{self.id}] REPAIR eseguito su {dir_name}. Ciclo resettato.")
             elif "config" in msg.topic:
                 dir_name = msg.topic.split("/")[2].split("_")[-1]
                 self.semafori[dir_name]["green_duration"] = int(payload["green_duration"])
@@ -102,7 +107,9 @@ class NodoIncrocio:
             elif f"srs/admin/inject/{self.id}" == msg.topic:
                 d = payload.get("direzione")
                 if d in self.semafori: self.genera_auto(d, payload.get("count", 1))
-        except: pass
+        except Exception as e: 
+            print(f"[{self.id}] ⚠️ Errore elaborazione MQTT su {msg.topic}: {e}", flush=True)
+            traceback.print_exc()
 
     def genera_auto(self, dir_name, count=1):
         s = self.semafori[dir_name]
@@ -116,16 +123,16 @@ class NodoIncrocio:
     def aggiorna_logica_luci(self):
         if not self.sim_active: return
 
-        # --- GRACEFUL DEGRADATION ---
+        # --- GRACEFUL DEGRADATION CORRETTA ---
         any_faulty = any(s["is_faulty"] for s in self.semafori.values())
         if any_faulty:
             for d, s in self.semafori.items():
                 if s["is_faulty"]:
-                    s["stato"] = "OFFLINE" # Quello rotto muore davvero
+                    s["stato"] = "OFFLINE" # Il guasto muore
                 else:
                     s["stato"] = "GIALLO_LAMPEGGIANTE" # Gli altri si mettono in sicurezza
             return
-        # ----------------------------
+        # -------------------------------------
 
         self.tick_count += 1
         master = "NORD" if self.fase_attuale == "NORD_SUD" else "EST"

@@ -171,23 +171,63 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-
-
-  opencode-brain:
+  opencode-brain-a:
     build:
       context: ./opencode
       dockerfile: Dockerfile.opencode
-    container_name: brain_server
+    container_name: srs-opencode-a
     networks:
       - srs-net
-    ports:
-      - "4096:4096"
     depends_on:
       - mcp-recovery-service
       - mcp-green-duration-service
     environment:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
+
+  opencode-brain-b:
+    build:
+      context: ./opencode
+      dockerfile: Dockerfile.opencode
+    container_name: srs-opencode-b
+    networks:
+      - srs-net
+    depends_on:
+      - mcp-recovery-service
+      - mcp-green-duration-service
+    environment:
+      - OPENCODE_SERVER_PASSWORD=srs
+    restart: unless-stopped
+  
+
+  haproxy-ai-1:
+    image: haproxy:2.8
+    container_name: srs-haproxy-ai-1
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy_ai.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "4096:4096"
+    depends_on:
+      - opencode-brain-a
+      - opencode-brain-b
+    restart: unless-stopped
+
+  haproxy-ai-2:
+    image: haproxy:2.8
+    container_name: srs-haproxy-ai-2
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy_ai.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "4097:4096"
+    depends_on:
+      - opencode-brain-a
+      - opencode-brain-b
+    restart: unless-stopped
+  
 
   bridge-1:
     build:
@@ -231,11 +271,12 @@ services:
     build:
       context: ./mcp_servers/recovery
       dockerfile: Dockerfile.recovery
-    container_name: mcp_recovery
     networks:
       - srs-net
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
+    deploy:
+      replicas: 2
     depends_on:
       haproxy-1:
         condition: service_started
@@ -243,7 +284,13 @@ services:
         condition: service_started
       influxdb:
         condition: service_started
-    restart: on-failure
+    healthcheck:
+      test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8000))" || kill 1
+      interval: 10s
+      timeout: 5s
+      retries: 3 
+    restart: always
+      
 
 
 
@@ -251,11 +298,12 @@ services:
     build:
       context: ./mcp_servers/green_duration
       dockerfile: Dockerfile.green
-    container_name: mcp_green_duration
     networks:
       - srs-net
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
+    deploy:
+      replicas: 2
     depends_on:
       haproxy-1:
         condition: service_started
@@ -263,7 +311,12 @@ services:
         condition: service_started
       influxdb:
         condition: service_started
-    restart: on-failure
+    healthcheck:
+      test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8001))" || kill 1
+      interval: 15s      
+      timeout: 5s        
+      retries: 3         
+    restart: always
 
   redis-lock-1:
     image: redis:alpine
