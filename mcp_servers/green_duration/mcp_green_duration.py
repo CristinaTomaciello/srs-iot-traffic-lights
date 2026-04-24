@@ -3,16 +3,12 @@ import sys
 import json
 import time
 import uuid
+import re
 
-# 1. SETUP PERCORSI E IMPORT
-# Saliamo di due livelli: mcp_servers/green_duration -> mcp_servers -> radice_progetto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 from mcp.server.fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
-
-# Importiamo le utility e le costanti centralizzate
 from simulator.utility.influx_utils import query_with_failover, INFLUX_BUCKET, INFLUX_ORG
 
 mcp = FastMCP("TrafficOptimizerMCP")
@@ -74,7 +70,6 @@ def get_traffic_status() -> str:
 
         if not allarmi: return "STATO: Traffico regolare su tutti i nodi."
         
-        # Restituiamo un report denso per l'IA
         return "ALLARME CONGESTIONE: " + " | ".join(allarmi)
  
     except Exception as e:
@@ -82,48 +77,102 @@ def get_traffic_status() -> str:
         return "ERRORE: Datasource non raggiungibile."
  
 @mcp.tool()
-@mcp.tool()
 def optimize_green_phase(incrocio_id: str, asse: str, new_duration: int, override_cycles: int ) -> str:
-    """Invia comando MQTT. Accetta assi (NORD_SUD) o nodi singoli (INC_0_0_NORD)."""
-    if new_duration > 60: return "RIFIUTATO: Massimo 60s."
+    """Invia comando MQTT con validazione incrociata ID/ASSE e LIMITI DINAMICI."""
     
+    # 1. AUTO-PULIZIA E VALIDAZIONE (Smart Parsing)
+    match = re.match(r"^(INC_\d+_\d+)(?:_([A-Z]+))?$", incrocio_id.upper())
+    if not match:
+        return "RIFIUTATO: Formato ID non valido. Usa INC_X_Y o INC_X_Y_DIR."
+    
+    id_radice = match.group(1)
+    dir_specifica = match.group(2) 
     asse_up = asse.upper()
-    if "NORD" in asse_up or "SUD" in asse_up: asse_target = "NORD_SUD"
-    elif "EST" in asse_up or "OVEST" in asse_up: asse_target = "EST_OVEST"
-    else: return f"RIFIUTATO: Asse '{asse}' non riconosciuto."
- 
+
+    if asse_up not in ["NORD_SUD", "EST_OVEST"]:
+        return "RIFIUTATO: Asse illegale. Valori ammessi SOLO 'NORD_SUD' o 'EST_OVEST'."
+
+    # 2. CROSS-CHECK DI SICUREZZA
+    if dir_specifica:
+        mappa_assi = {
+            "NORD": "NORD_SUD", "SUD": "NORD_SUD",
+            "EST": "EST_OVEST", "OVEST": "EST_OVEST"
+        }
+        if mappa_assi.get(dir_specifica) != asse_up:
+            return f"RIFIUTATO: Conflitto tra ID ({dir_specifica}) e ASSE ({asse_up})."
+        
+    # 3. CONTROLLO CICLI MASSIMI
+    if override_cycles < 1 or override_cycles > 3:
+        return "BLOCCATO: 'override_cycles' deve essere compreso tra 1 e 3."
+
+    # 4. VERIFICA DINAMICA DEL VERDE ATTUALE
     try:
-        direzioni = ["NORD", "SUD"] if asse_target == "NORD_SUD" else ["EST", "OVEST"]
+        query = f"""
+        from(bucket: "{INFLUX_BUCKET}")
+          |> range(start: -2m)
+          |> filter(fn: (r) => r["_measurement"] == "stato_traffico")
+          |> filter(fn: (r) => r["incrocio"] == "{id_radice}")
+          |> filter(fn: (r) => r["_field"] == "durata_verde")
+          |> last()
+        """
+        result = query_with_failover(query)
+        
+        verde_attuale = 10 
+        if result and len(result) > 0 and len(result[0].records) > 0:
+            verde_attuale = int(result[0].records[0].get_value())
+            
+        # 5. APPLICAZIONE DEI LIMITI MATEMATICI
+        limite_massimo = min(verde_attuale + 20, 60)
+        
+        if new_duration > limite_massimo:
+            log_mcp("🚫", f"Allucinazione sventata. Verde attuale: {verde_attuale}s. IA ha chiesto: {new_duration}s.")
+            return f"BLOCCATO DAL SISTEMA: Richiesta eccessiva. Puoi aumentare il verde massimo fino a {limite_massimo}s."
+            
+    except Exception as e:
+        log_mcp("⚠️", f"Errore lettura DB per validazione. {e}")
+        if new_duration > 30: 
+            return "BLOCCATO: DB non raggiungibile, impossibile validare aumenti oltre 30s."
+
+    # 6. ESECUZIONE
+    try:
+        direzioni = ["NORD", "SUD"] if asse_up == "NORD_SUD" else ["EST", "OVEST"]
         payload = json.dumps({"green_duration": new_duration, "override_cycles": override_cycles})
  
         for d in direzioni:
-            topic = f"srs/edge/{incrocio_id}_{d}/config"
+            topic = f"srs/edge/{id_radice}_{d}/config"
             mqtt_client.publish(topic, payload, qos=1)
  
-        log_mcp("🟢", f"Ottimizzazione {incrocio_id} [{asse_target}] -> {new_duration}s")
-        return f"SUCCESSO: {incrocio_id} asse {asse_target} aggiornato."
+        log_mcp("🟢", f"Ottimizzazione {id_radice} [{asse_up}] -> Da {verde_attuale}s a {new_duration}s per {override_cycles} cicli")
+        return f"SUCCESSO: {id_radice} asse {asse_up} aggiornato a {new_duration}s."
     except Exception as e:
         log_mcp("💥", f"Errore MQTT: {e}")
         return "ERRORE: Comando non inviato."
 
 @mcp.tool()
 def verify_green_duration(incrocio_id: str) -> str:
-    """Verifica l'applicazione della policy leggendo dal database disponibile."""
+    """Verifica l'applicazione della policy."""
+    # Auto-pulizia dell'ID
+    match = re.match(r"^(INC_\d+_\d+)", incrocio_id.upper())
+    if match:
+        id_radice = match.group(1)
+    else:
+        return "ERRORE: Formato ID non valido."
+
     try:
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
           |> range(start: -1m)
           |> filter(fn: (r) => r["_measurement"] == "stato_traffico")
-          |> filter(fn: (r) => r["incrocio"] == "{incrocio_id}")
+          |> filter(fn: (r) => r["incrocio"] == "{id_radice}")
           |> filter(fn: (r) => r["_field"] == "durata_verde")
           |> last()
           |> pivot(rowKey:["direzione"], columnKey: ["_field"], valueColumn: "_value")
         """
         result = query_with_failover(query)
  
-        if not result: return f"Nessun dato per {incrocio_id}."
+        if not result: return f"Nessun dato per {id_radice}."
  
-        report = f"VERIFICA TELEMETRIA (Failover DB): {incrocio_id}\n"
+        report = f"VERIFICA TELEMETRIA: {id_radice}\n"
         for table in result:
             for record in table.records:
                 report += f"- Asse {record.values.get('direzione')}: Verde = {record.values.get('durata_verde')}s\n"
@@ -133,24 +182,31 @@ def verify_green_duration(incrocio_id: str) -> str:
     
 @mcp.tool()
 def check_hardware_lock(incrocio_id: str) -> str:
-    """Verifica lock di sicurezza. Risponde con OK o LOCKED."""
-    try:
-        # Controllo Hardware (Riavvii recenti)
-        res_hw = query_with_failover(f'from(bucket: "{INFLUX_BUCKET}") |> range(start: -90s) |> filter(fn: (r) => r["_measurement"] == "agent_audit" and r["node_id"] =~ /{incrocio_id}/) |> last()')
-        if res_hw: return f"LOCKED 🔒: Riavvio hardware recente su {incrocio_id}."
+    """Verifica lock di sicurezza. Risponde con OK o LOCKED."""    
+    # Auto-pulizia dell'ID
+    match = re.match(r"^(INC_\d+_\d+)", incrocio_id.upper())
+    if match:
+        id_radice = match.group(1)
+    else:
+        return "LOCKED 🔒: Errore sicurezza formato ID."
 
-        # Controllo Policy (Verde già alto)
-        res_tr = query_with_failover(f'from(bucket: "{INFLUX_BUCKET}") |> range(start: -1m) |> filter(fn: (r) => r["_measurement"] == "stato_traffico" and r["incrocio"] == "{incrocio_id}" and r["_field"] == "durata_verde") |> last()')
+    try:
+        # Controllo Hardware
+        res_hw = query_with_failover(f'from(bucket: "{INFLUX_BUCKET}") |> range(start: -90s) |> filter(fn: (r) => r["_measurement"] == "agent_audit" and r["node_id"] =~ /{id_radice}/) |> last()')
+        if res_hw: return f"LOCKED 🔒: Riavvio hardware recente su {id_radice}."
+
+        # Controllo Policy
+        res_tr = query_with_failover(f'from(bucket: "{INFLUX_BUCKET}") |> range(start: -1m) |> filter(fn: (r) => r["_measurement"] == "stato_traffico" and r["incrocio"] == "{id_radice}" and r["_field"] == "durata_verde") |> last()')
         if res_tr:
             for table in res_tr:
                 for record in table.records:
                     if int(record.get_value()) >= 30: return f"LOCKED 🔒: Policy già attiva ({record.get_value()}s)."
 
-        return f"UNLOCKED 🔓: {incrocio_id} pronto."
+        return f"UNLOCKED 🔓: {id_radice} pronto."
             
     except Exception as e:
         log_mcp("⚠️", f"Errore Lock Check: {e}")
-        return "LOCKED 🔒: Errore sicurezza, intervento negato."
+        return "LOCKED 🔒: Errore sistema. Intervento negato in via precauzionale."
  
 if __name__ == "__main__":
     mcp.run()

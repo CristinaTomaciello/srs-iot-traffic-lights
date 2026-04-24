@@ -3,19 +3,17 @@ import sys
 import json
 import time
 import uuid
+import re  # AGGIUNTO PER LA VALIDAZIONE DI SICUREZZA
 
-# 1. SETUP PERCORSI E IMPORT
-# Saliamo di due livelli: mcp_servers/recovery -> mcp_servers -> radice_progetto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 from mcp.server.fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
-
-# Importiamo le utility e le costanti centralizzate
 from simulator.utility.influx_utils import query_with_failover, write_dual, INFLUX_BUCKET, INFLUX_ORG, log_audit
 
 mcp = FastMCP("EdgeRecoveryMCP")
+
+VALID_NODE_PATTERN = re.compile(r"^INC_\d+_\d+_(NORD|SUD|EST|OVEST)$")
 
 # --- CONFIGURAZIONE MQTT ---
 is_mqtt_connected = False
@@ -56,12 +54,14 @@ def log_mcp(emoji, message):
 connetti_mqtt_agente()
 
 # =======================================================
-# TOOL 1: TELEMETRIA (Usato dall'Orchestratore)
+# TOOL 1: TELEMETRIA
 # =======================================================
-@mcp.tool()
 @mcp.tool()
 def get_node_telemetry(node_id: str) -> str:
     """Diagnosi rapida dello stato del nodo."""
+    if not VALID_NODE_PATTERN.match(node_id):
+        return "ERRORE: ID nodo non valido. Formato richiesto: INC_X_Y o INC_X_Y_DIR."
+
     try:
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
@@ -79,7 +79,6 @@ def get_node_telemetry(node_id: str) -> str:
         secondi_fa = int(time.time() - record.get_time().timestamp())
         status = "OK" if secondi_fa < 30 else "TIMEOUT"
         
-        # Report ultra-compatto per l'IA
         return f"NODO: {node_id} | STATO: {status} ({secondi_fa}s fa) | COLORE: {record.get_value()}"
         
     except Exception as e:
@@ -87,11 +86,14 @@ def get_node_telemetry(node_id: str) -> str:
         return f"ERRORE: Database non raggiungibile."
 
 # =======================================================
-# TOOL 2: CONTROLLO AUDIT LOG (Usato dal Validatore)
+# TOOL 2: CONTROLLO AUDIT LOG
 # =======================================================
 @mcp.tool()
 def get_last_restart_time(node_id: str) -> str:
     """Verifica l'ultimo riavvio con logica di failover database."""
+    if not VALID_NODE_PATTERN.match(node_id):
+        return '{"error": "ID nodo non valido."}'
+
     try:
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
@@ -102,8 +104,6 @@ def get_last_restart_time(node_id: str) -> str:
           |> filter(fn: (r) => r["_value"] == "RESTART")
           |> last()
         """
-        
-        # USA IL FAILOVER
         result = query_with_failover(query)
         
         if not result or len(result) == 0:
@@ -119,21 +119,22 @@ def get_last_restart_time(node_id: str) -> str:
         return f'{{"error": "{str(e)}"}}'
 
 # =======================================================
-# TOOL 3: ESECUZIONE (Usato dal Recovery Agent)
+# TOOL 3: ESECUZIONE
 # =======================================================
 @mcp.tool()
 def restart_edge_node(node_id: str) -> str:
     """Invia REPAIR e logga l'azione su Alpha e Beta."""
+    if not VALID_NODE_PATTERN.match(node_id):
+        return "BLOCCATO: Riavvio negato. ID nodo non valido o non autorizzato."
+
     if not is_mqtt_connected:
         if not connetti_mqtt_agente():
             return "ERRORE: MQTT Down."
 
     try:
-        # 1. MQTT
         topic = f"srs/admin/node/{node_id}/fault_injection"
         mqtt_client.publish(topic, json.dumps({"type": "REPAIR"}), qos=1)
         
-        # 2. AUDIT DUAL-WRITE
         point = influxdb_client.Point("agent_audit") \
             .tag("node_id", node_id) \
             .field("action", "RESTART")
@@ -156,5 +157,6 @@ def escalate_to_human(node_id: str, diagnostic_summary: str) -> str:
     """Passa il controllo all'operatore."""
     log_mcp("🚨", f"ESCALATION RICHIESTA per {node_id}: {diagnostic_summary}")
     return "ESCALATION COMPLETATA."
+
 if __name__ == "__main__":
     mcp.run()
