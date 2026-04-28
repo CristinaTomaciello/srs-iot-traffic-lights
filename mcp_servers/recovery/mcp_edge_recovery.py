@@ -4,9 +4,11 @@ import json
 import time
 import uuid
 import re  # AGGIUNTO PER LA VALIDAZIONE DI SICUREZZA
+import uvicorn
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
 from simulator.utility.influx_utils import query_with_failover, write_dual, INFLUX_BUCKET, INFLUX_ORG, log_audit
@@ -159,4 +161,4 @@ def escalate_to_human(node_id: str, diagnostic_summary: str) -> str:
     return "ESCALATION COMPLETATA."
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="sse", host="0.0.0.0", port=8000)

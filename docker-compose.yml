@@ -198,8 +198,10 @@ services:
     networks:
       - srs-net
     depends_on:
-      - mcp-recovery-service
-      - mcp-green-duration-service
+      mcp-recovery-service:
+        condition: service_healthy
+      mcp-green-duration-service:
+        condition: service_healthy
     environment:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
@@ -212,8 +214,10 @@ services:
     networks:
       - srs-net
     depends_on:
-      - mcp-recovery-service
-      - mcp-green-duration-service
+      mcp-recovery-service:
+        condition: service_healthy
+      mcp-green-duration-service:
+        condition: service_healthy
     environment:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
@@ -294,8 +298,6 @@ services:
       - srs-net
     expose:
       - "8000"
-    deploy:
-      replicas: 2
     depends_on:
       haproxy-1:
         condition: service_started
@@ -305,6 +307,8 @@ services:
         condition: service_started
       semafori-tsdb-beta:
         condition: service_started
+    deploy:
+      replicas: 2
     healthcheck:
       test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8000))" || kill 1
       interval: 10s
@@ -323,8 +327,6 @@ services:
       - srs-net
     expose:
       - "8001"
-    deploy:
-      replicas: 2
     depends_on:
       haproxy-1:
         condition: service_started
@@ -334,6 +336,8 @@ services:
         condition: service_started
       semafori-tsdb-beta:
         condition: service_started
+    deploy:
+      replicas: 2
     healthcheck:
       test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8001))" || kill 1
       interval: 15s      
