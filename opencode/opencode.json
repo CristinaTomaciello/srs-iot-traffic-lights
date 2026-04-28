@@ -1,28 +1,57 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/big-pickle",
+  "model": "sambanova/DeepSeek-V3.1",
+  "provider": {
+    "sambanova": {
+      "name": "SambaNova",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://api.sambanova.ai/v1",
+        "apiKey": "0edadd67-7b10-4109-9457-c418b7685b1d"
+      },
+      "models": {
+        "DeepSeek-V3.1": {
+          "name": "DeepSeek-V3.1",
+          "variants": {
+            "fast": {
+              "reasoningEffort": "low",
+              "textVerbosity": "low"
+            }
+          }
+        }
+      }
+    }
+  },
   "server": {
     "port": 4096,
     "hostname": "0.0.0.0",
     "cors": ["*"]
   },
   "mcp": {
-    "edge_recovery": {
-      "type": "local",
-      "command": ["nc", "mcp-recovery-service", "8000"],
-      "enabled": true
-    },
     "green_duration": {
-      "type": "local",
-      "command": ["nc", "mcp-green-duration-service", "8001"],
-      "enabled": true
+      "type": "remote",
+      "enabled": true,
+      "url": "http://mcp-green-duration-service:8001/sse",
+      "transport": "sse"
+    },
+    "edge_recovery": {
+      "type": "remote",
+      "enabled": true,
+      "url": "http://mcp-recovery-service:8000/sse",
+      "transport": "sse"
     }
+  },
+  "tools": {
+    "green_duration_*": true,
+    "edge_recovery_*": true
   },
   "agent": {
     "hardware-orchestrator": {
       "mode": "primary",
       "description": "Cervello Guasti Hardware",
       "steps": 4,
+      "textVerbosity": "low",
+      "reasoningEffort": "low",
       "prompt": "RUOLO: Incident Response L3. SCOPO: Risoluzione guasti hardware mediante validazione e delega.\n\nISTRUZIONI TASSATIVE ANTI-PIGRIZIA:\n1. LINGUA: Usa SOLO l'italiano.\n2. VIETATO FERMARSI: Non creare 'piani' o 'raccomandazioni'. Devi eseguire l'intero flusso di lavoro autonomamente. Se il validatore approva, DEVI chiamare 'recovery-agent' nella stessa identica sessione prima di scrivere il report.\n\nWORKFLOW:\n1. VALIDAZIONE: Invia ID nodo a 'policy-validator-agent'.\n2. ESECUZIONE OBBLIGATORIA: Se VERDETTO=APPROVATO, usa immediatamente 'recovery-agent'. Se BLOCCATO o errore, usa 'edge_recovery_escalate_to_human'.\n\nFORMATO REPORT FINALE (Usa ESATTAMENTE questo e nient'altro):\n[ID_NODO]: <ID esatto, es. INC_0_0_NORD>\n[AZIONE]: <REPAIR | ESCALATION | BLOCCATA>\n[ESITO]: <Max 15 parole sul risultato finale tecnico>",
       "tools": { 
         "policy-validator-agent": true, 
@@ -34,6 +63,7 @@
       "mode": "subagent",
       "description": "Validatore Sicurezza Hardware",
       "steps": 3,
+      "textVerbosity": "low",
       "prompt": "RUOLO: Validatore Sicurezza. SCOPO: Prevenire riavvii inutili e loop.\n\nCONTROLLI TASSATIVI:\n1. FRESHNESS: 'edge_recovery_get_node_telemetry'. Se dati < 30s -> BLOCCATO (Falso Positivo).\n2. ANTI-LOOP: 'edge_recovery_get_last_restart_time'. Se < 300s -> BLOCCATO (Prevenzione Loop).\n\nOUTPUT RIGIDO (Esclusivamente questo formato):\nRAGIONAMENTO: <Max 10 parole>\nVERDETTO: <APPROVATO | BLOCCATO>",
       "tools": {
         "edge_recovery_get_node_telemetry": true,
@@ -44,6 +74,7 @@
       "mode": "subagent",
       "description": "Braccio Operativo Hardware",
       "steps": 3,
+      "textVerbosity": "low",
       "prompt": "RUOLO: Esecutore Tecnico. SCOPO: Remediation verificabile.\n\nWORKFLOW:\n1. RESTART: 'edge_recovery_restart_edge_node'.\n2. VERIFICA: 'edge_recovery_get_node_telemetry'.\n\nREPORT:\n[STATUS]: <RIPRISTINATO | FALLIMENTO>\n[LOG]: <Conferma telemetria post-azione>",
       "tools": {
         "edge_recovery_restart_edge_node": true,
@@ -54,6 +85,8 @@
       "mode": "primary",
       "description": "Automa Ottimizzazione Traffico",
       "steps": 4,
+      "textVerbosity": "low",
+      "reasoningEffort": "low",
       "prompt": "SEI UN TERMINALE DI SISTEMA. Il tuo unico scopo è eseguire un workflow e restituire un JSON puro.\n\nWORKFLOW:\n1. Al comando '[PROATTIVO]', delega a 'traffic-validator'.\n2. Se APPROVATO, delega a 'traffic-worker'.\n3. Se BLOCCATO o alla fine del lavoro, restituisci il risultato.\n\nREGOLA DI OUTPUT ASSOLUTA:\nDevi rispondere ESCLUSIVAMENTE con un oggetto JSON valido. Nessun testo prima, nessun testo dopo, nessuna formattazione Markdown. Usa esattamente questa struttura:\n{\n  \"incrocio\": \"<ID radice>\",\n  \"azione\": \"<OTTIMIZZATO | BLOCCATO>\",\n  \"motivo\": \"<Rapporto finale di max 15 parole>\"\n}",
       "tools": { 
         "traffic-validator": true, 
@@ -64,6 +97,7 @@
       "mode": "subagent",
       "description": "Validatore Traffico",
       "steps": 3,
+      "textVerbosity": "low",
       "prompt": "RUOLO: Validatore Traffico. SCOPO: Filtro interventi su nodi sani.\n\nCONTROLLI:\n1. HEALTH: 'green_duration_get_traffic_status'. No dati -> BLOCCATO.\n2. LOCK: 'green_duration_check_hardware_lock'. Se True -> BLOCCATO.\n3. CONGESTIONE: Se no [ALLARME CONGESTIONE] -> BLOCCATO.\n\nOUTPUT:\nRAGIONAMENTO: <Max 10 parole>\nVERDETTO: <APPROVATO per [ASSE] / BLOCCATO>",
       "tools": { 
         "green_duration_check_hardware_lock": true, 
@@ -74,6 +108,7 @@
       "mode": "subagent",
       "description": "Braccio Operativo Traffico",
       "steps": 4,
+      "textVerbosity": "low",
       "prompt": "Sei l'Esecutore Traffico. IL TUO OBIETTIVO È NON FARTI MAI BLOCCARE DAL SISTEMA.\n\nWORKFLOW MATEMATICO OBBLIGATORIO (Esegui in ordine):\n1. ISPEZIONE: Usa 'green_duration_verify_green_duration' sull'incrocio per leggere la 'durata_verde' attuale.\n2. CALCOLO DEL TETTO: Il sistema ti bloccherà se chiedi troppo. Calcola il tetto massimo: (durata_verde_attuale + 20). Se il verde attuale è 10, il massimo che puoi chiedere è 30.\n3. ESECUZIONE: Usa 'green_duration_optimize_green_phase'. Come 'new_duration', inserisci ESATTAMENTE il tetto massimo che hai calcolato al punto 2. Imposta 'override_cycles' a 3.\n\nFORMATO OUTPUT:\n[ESITO]: <SUCCESSO | ERRORE>\n[DETTAGLIO]: <Es: Verde attuale 10s. Calcolato limite sicuro. Inviato 30s.>",
       "tools": {
         "green_duration_optimize_green_phase": true,

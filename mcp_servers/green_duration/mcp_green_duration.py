@@ -4,9 +4,11 @@ import json
 import time
 import uuid
 import re
+import uvicorn
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
 from simulator.utility.influx_utils import query_with_failover, INFLUX_BUCKET, INFLUX_ORG
@@ -209,4 +211,4 @@ def check_hardware_lock(incrocio_id: str) -> str:
         return "LOCKED 🔒: Errore sistema. Intervento negato in via precauzionale."
  
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="sse", host="0.0.0.0", port=8001)
