@@ -1,23 +1,16 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "model": "sambanova/DeepSeek-V3.1",
+  "$schema": "https://opencode.ai/config-json",
   "provider": {
-    "sambanova": {
-      "name": "SambaNova",
+    "litellm": {
       "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
       "options": {
-        "baseURL": "https://api.sambanova.ai/v1",
-        "apiKey": "0edadd67-7b10-4109-9457-c418b7685b1d"
+        "baseURL": "https://litellm-proxy-1013932759942.europe-west8.run.app",
+        "apiKey": "Inserire chiave API qui"
       },
       "models": {
-        "DeepSeek-V3.1": {
-          "name": "DeepSeek-V3.1",
-          "variants": {
-            "fast": {
-              "reasoningEffort": "low",
-              "textVerbosity": "low"
-            }
-          }
+        "gemini-2.5-pro": {
+          "name": "Gemini 2.5 pro"
         }
       }
     }
@@ -25,20 +18,20 @@
   "server": {
     "port": 4096,
     "hostname": "0.0.0.0",
-    "cors": ["*"]
+    "cors": [
+      "*"
+    ]
   },
   "mcp": {
     "green_duration": {
       "type": "remote",
-      "enabled": true,
-      "url": "http://mcp-green-duration-service:8001/sse",
-      "transport": "sse"
+      "url": "http://srs-haproxy-mcp:8001/mcp",
+      "transport": "streamable-http"
     },
     "edge_recovery": {
       "type": "remote",
-      "enabled": true,
-      "url": "http://mcp-recovery-service:8000/sse",
-      "transport": "sse"
+      "url": "http://srs-haproxy-mcp:8000/mcp",
+      "transport": "streamable-http"
     }
   },
   "tools": {
@@ -48,71 +41,78 @@
   "agent": {
     "hardware-orchestrator": {
       "mode": "primary",
-      "description": "Cervello Guasti Hardware",
-      "steps": 4,
+      "description": "Hardware recovery coordinator",
+      "steps": 10,
       "textVerbosity": "low",
-      "reasoningEffort": "low",
-      "prompt": "RUOLO: Incident Response L3. SCOPO: Risoluzione guasti hardware mediante validazione e delega.\n\nISTRUZIONI TASSATIVE ANTI-PIGRIZIA:\n1. LINGUA: Usa SOLO l'italiano.\n2. VIETATO FERMARSI: Non creare 'piani' o 'raccomandazioni'. Devi eseguire l'intero flusso di lavoro autonomamente. Se il validatore approva, DEVI chiamare 'recovery-agent' nella stessa identica sessione prima di scrivere il report.\n\nWORKFLOW:\n1. VALIDAZIONE: Invia ID nodo a 'policy-validator-agent'.\n2. ESECUZIONE OBBLIGATORIA: Se VERDETTO=APPROVATO, usa immediatamente 'recovery-agent'. Se BLOCCATO o errore, usa 'edge_recovery_escalate_to_human'.\n\nFORMATO REPORT FINALE (Usa ESATTAMENTE questo e nient'altro):\n[ID_NODO]: <ID esatto, es. INC_0_0_NORD>\n[AZIONE]: <REPAIR | ESCALATION | BLOCCATA>\n[ESITO]: <Max 15 parole sul risultato finale tecnico>",
-      "tools": { 
-        "policy-validator-agent": true, 
-        "recovery-agent": true, 
-        "edge_recovery_escalate_to_human": true 
+      "prompt": "ROLE: Hardware Orchestrator. Target: node_id.\n\nFLOW:\n1. Use native tools to validate and act.\n2. When finished, output ONLY this JSON format (no markdown):\n{\"node_id\": \"<id>\", \"action\": \"<REPAIR/ESCALATION>\", \"outcome\": \"<result>\"}\n\nCRITICAL: No conversational text. Do not explain your steps.",
+      "permission": {
+        "task": {
+          "policy-validator-agent": "allow",
+          "recovery-agent": "allow"
+        }
+      },
+      "tools": {
+        "policy-validator-agent": true,
+        "recovery-agent": true,
+        "edge_recovery_escalate_to_human": true
       }
     },
     "policy-validator-agent": {
       "mode": "subagent",
-      "description": "Validatore Sicurezza Hardware",
-      "steps": 3,
+      "description": "Validates node before restart",
+      "steps": 6,
       "textVerbosity": "low",
-      "prompt": "RUOLO: Validatore Sicurezza. SCOPO: Prevenire riavvii inutili e loop.\n\nCONTROLLI TASSATIVI:\n1. FRESHNESS: 'edge_recovery_get_node_telemetry'. Se dati < 30s -> BLOCCATO (Falso Positivo).\n2. ANTI-LOOP: 'edge_recovery_get_last_restart_time'. Se < 300s -> BLOCCATO (Prevenzione Loop).\n\nOUTPUT RIGIDO (Esclusivamente questo formato):\nRAGIONAMENTO: <Max 10 parole>\nVERDETTO: <APPROVATO | BLOCCATO>",
+      "prompt": "ROLE: Policy Validator. Input: node_id.\n\nFLOW:\n1. Call tool 'edge_recovery_validate_node_for_restart' with node_id.\n2. Return EXACTLY the JSON received from the tool. No extra text.",
       "tools": {
-        "edge_recovery_get_node_telemetry": true,
-        "edge_recovery_get_last_restart_time": true
+        "edge_recovery_validate_node_for_restart": true
       }
     },
     "recovery-agent": {
       "mode": "subagent",
-      "description": "Braccio Operativo Hardware",
-      "steps": 3,
+      "description": "Executes restart and verifies recovery",
+      "steps": 6,
       "textVerbosity": "low",
-      "prompt": "RUOLO: Esecutore Tecnico. SCOPO: Remediation verificabile.\n\nWORKFLOW:\n1. RESTART: 'edge_recovery_restart_edge_node'.\n2. VERIFICA: 'edge_recovery_get_node_telemetry'.\n\nREPORT:\n[STATUS]: <RIPRISTINATO | FALLIMENTO>\n[LOG]: <Conferma telemetria post-azione>",
+      "prompt": "ROLE: Recovery Agent. Input: node_id.\n\nFLOW:\n1. Call tool 'edge_recovery_execute_node_restart'.\n2. Call tool 'edge_recovery_verify_node_recovery'.\n3. Return EXACTLY the verification result. No extra text.",
       "tools": {
-        "edge_recovery_restart_edge_node": true,
-        "edge_recovery_get_node_telemetry": true
+        "edge_recovery_execute_node_restart": true,
+        "edge_recovery_verify_node_recovery": true
       }
     },
     "traffic-orchestrator": {
       "mode": "primary",
-      "description": "Automa Ottimizzazione Traffico",
-      "steps": 4,
+      "description": "Traffic Optimization Coordinator",
+      "steps": 15,
       "textVerbosity": "low",
-      "reasoningEffort": "low",
-      "prompt": "SEI UN TERMINALE DI SISTEMA. Il tuo unico scopo è eseguire un workflow e restituire un JSON puro.\n\nWORKFLOW:\n1. Al comando '[PROATTIVO]', delega a 'traffic-validator'.\n2. Se APPROVATO, delega a 'traffic-worker'.\n3. Se BLOCCATO o alla fine del lavoro, restituisci il risultato.\n\nREGOLA DI OUTPUT ASSOLUTA:\nDevi rispondere ESCLUSIVAMENTE con un oggetto JSON valido. Nessun testo prima, nessun testo dopo, nessuna formattazione Markdown. Usa esattamente questa struttura:\n{\n  \"incrocio\": \"<ID radice>\",\n  \"azione\": \"<OTTIMIZZATO | BLOCCATO>\",\n  \"motivo\": \"<Rapporto finale di max 15 parole>\"\n}",
-      "tools": { 
-        "traffic-validator": true, 
-        "traffic-worker": true 
+      "prompt": "ROLE: Traffic Coordinator. You DELEGATE tasks.\n\nCRITICAL ANTI-HALLUCINATION RULE: You MUST NOT generate the 'final_report' JSON immediately. If you do not have access to the 'traffic-validator' tool, you MUST output: {\"error\": \"Tools offline\"} and END.\n\nEXECUTION FLOW:\n1. Call native tool 'traffic-validator' passing EXACTLY the INPUT string you received (e.g., [REATTIVO] Emergenza su...).\n2. If Validator returns VERDICT: BLOCKED -> Output exactly: {\"intersection\": \"NONE\", \"action\": \"NONE\", \"reason\": \"blocked\"}. END.\n3. If Validator returns VERDICT: APPROVED -> Call native tool 'traffic-worker' passing the EXACT TARGET string. Do NOT alter data.\n4. Upon Worker completion, output ONLY this pure JSON (no markdown):\n{\"final_report\": [{\"intersection\": \"<id>\", \"action\": \"OPTIMIZED\", \"reason\": \"<cars> cars\"}]}\n\nCRITICAL: Never hallucinate data. Wait for subagent tools to finish before generating the final JSON.",
+      "permission": {
+        "task": {
+          "traffic-validator": "allow",
+          "traffic-worker": "allow"
+        }
+      },
+      "tools": {
+        "traffic-validator": true,
+        "traffic-worker": true
       }
     },
     "traffic-validator": {
       "mode": "subagent",
-      "description": "Validatore Traffico",
-      "steps": 3,
+      "description": "Traffic condition validator",
+      "steps": 6,
       "textVerbosity": "low",
-      "prompt": "RUOLO: Validatore Traffico. SCOPO: Filtro interventi su nodi sani.\n\nCONTROLLI:\n1. HEALTH: 'green_duration_get_traffic_status'. No dati -> BLOCCATO.\n2. LOCK: 'green_duration_check_hardware_lock'. Se True -> BLOCCATO.\n3. CONGESTIONE: Se no [ALLARME CONGESTIONE] -> BLOCCATO.\n\nOUTPUT:\nRAGIONAMENTO: <Max 10 parole>\nVERDETTO: <APPROVATO per [ASSE] / BLOCCATO>",
-      "tools": { 
-        "green_duration_check_hardware_lock": true, 
-        "green_duration_get_traffic_status": true 
+      "prompt": "ROLE: Traffic condition validator.\n\nEXECUTION FLOW:\n1. Extract the specific Target ID (e.g., INC_0_0_NORD) and the number of cars from the input string.\n2. Extract the Base ID from the Target ID (e.g., INC_0_0_NORD -> INC_0_0).\n3. Call tool 'green_duration_check_lock' passing the Base ID.\n4. If the tool returns 'LOCKED', return EXACTLY: \"VERDICT: BLOCKED \\n REASON: Node locked or in cooldown\". END.\n5. If the tool returns 'UNLOCKED', return EXACTLY:\nVERDICT: APPROVED\nTARGET: {\"id\": \"<exact_target_id>\", \"cars\": <car_count>}\n\nCRITICAL: Do not invent data. Extract strictly from the prompt.",
+      "tools": {
+        "green_duration_check_lock": true
       }
     },
     "traffic-worker": {
       "mode": "subagent",
-      "description": "Braccio Operativo Traffico",
-      "steps": 4,
+      "description": "Traffic optimization executor",
+      "steps": 6,
       "textVerbosity": "low",
-      "prompt": "Sei l'Esecutore Traffico. IL TUO OBIETTIVO È NON FARTI MAI BLOCCARE DAL SISTEMA.\n\nWORKFLOW MATEMATICO OBBLIGATORIO (Esegui in ordine):\n1. ISPEZIONE: Usa 'green_duration_verify_green_duration' sull'incrocio per leggere la 'durata_verde' attuale.\n2. CALCOLO DEL TETTO: Il sistema ti bloccherà se chiedi troppo. Calcola il tetto massimo: (durata_verde_attuale + 20). Se il verde attuale è 10, il massimo che puoi chiedere è 30.\n3. ESECUZIONE: Usa 'green_duration_optimize_green_phase'. Come 'new_duration', inserisci ESATTAMENTE il tetto massimo che hai calcolato al punto 2. Imposta 'override_cycles' a 3.\n\nFORMATO OUTPUT:\n[ESITO]: <SUCCESSO | ERRORE>\n[DETTAGLIO]: <Es: Verde attuale 10s. Calcolato limite sicuro. Inviato 30s.>",
+      "prompt": "ROLE: Traffic optimization executor.\n\nEXECUTION FLOW:\n1. Extract the target 'id' and 'cars' from the input.\n2. Act as a Traffic Engineer and EVALUATE the optimal green duration and cycles:\n   - DURATION: Calculate (15 + (cars * 1.5)). Cap at a MAXIMUM of 35 seconds to avoid starvation.\n   - CYCLES: If cars <= 20 -> 1 cycle. If cars 21-30 -> 2 cycles. If cars > 30 -> 3 cycles.\n3. Call tool 'green_duration_optimize_node' passing 'target_id', 'duration', and 'cycles' as distinct parameters.\n4. Return EXACTLY the plain text report received from the tool.\n\nCRITICAL: You must pass the calculated values to the tool, do not use default placeholders.",
       "tools": {
-        "green_duration_optimize_green_phase": true,
-        "green_duration_verify_green_duration": true
+        "green_duration_optimize_node": true
       }
     }
   }

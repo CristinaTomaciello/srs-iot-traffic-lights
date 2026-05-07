@@ -16,6 +16,7 @@ class NodoIncrocio:
         self.tick_count = 0
         self.in_giallo = False
         self.clearance_active = False
+        self.smaltimento_times = {}
         
         self.mqtt_connected = False
         
@@ -176,50 +177,69 @@ class NodoIncrocio:
             else: s["stato"] = "ROSSO"
 
     def processa_traffico(self):
-        if not self.sim_active: return
+        if not self.sim_active:
+            return
 
-        # --- GRACEFUL DEGRADATION ---
-        # Se l'incrocio è in Fail-Safe, il traffico si blocca
         any_faulty = any(s["is_faulty"] for s in self.semafori.values())
-        if any_faulty:
-            return 
-        # ----------------------------
-
         ora = time.time()
+
         for d, s in self.semafori.items():
-            if s["is_faulty"]: continue
+            if s["is_faulty"]:
+                continue
+
+            # 1. Generazione auto ai bordi (identico a prima)
             if s["config"].get("is_border") and random.random() < 0.02:
                 self.genera_auto(d)
+
+            # 2. Ricezione auto in arrivo (identico a prima)
             for a in list(s["auto_in_arrivo"]):
                 if ora >= a["timestamp_arrivo"]:
                     s["coda"].append(a)
                     s["auto_in_arrivo"].remove(a)
-            if s["stato"] == "VERDE_PRINCIPALE" and s["coda"]:
-                auto = s["coda"].pop(0)
-                dest = auto["destinazione"]
-                best_dir = None
-                min_dist = 9999
-                strade = s["config"].get("strade_uscita", {})
-                for dir_uscita, info in strade.items():
-                    target = info["target"]
-                    if target == "OUT":
-                        r, c = int(self.id.split("_")[1]), int(self.id.split("_")[2])
-                        dist = abs(r - dest["r"]) + abs(c - dest["c"])
-                        if dist <= 1: 
+
+            # 3. Smaltimento (normale o degradato)
+            puo_smaltire = (s["stato"] == "VERDE_PRINCIPALE") or (
+                any_faulty and s["stato"] == "GIALLO_LAMPEGGIANTE"
+            )
+
+            if puo_smaltire and s["coda"]:
+                rate = 4.0 if (any_faulty and s["stato"] == "GIALLO_LAMPEGGIANTE") else 2.0
+                ultimo = self.smaltimento_times.get(d, 0)
+                if ora - ultimo >= rate:
+                    self.smaltimento_times[d] = ora
+                    auto = s["coda"].pop(0)
+                    dest = auto["destinazione"]
+
+                    # 4. Instradamento (identico a prima)
+                    best_dir = None
+                    min_dist = 9999
+                    strade = s["config"].get("strade_uscita", {})
+                    for dir_uscita, info in strade.items():
+                        target = info["target"]
+                        if target == "OUT":
+                            r, c = int(self.id.split("_")[1]), int(self.id.split("_")[2])
+                            dist = abs(r - dest["r"]) + abs(c - dest["c"])
+                            if dist <= 1:
+                                best_dir = dir_uscita
+                                break
+                            continue
+                        tr, tc = int(target.split("_")[1]), int(target.split("_")[2])
+                        dist = abs(tr - dest["r"]) + abs(tc - dest["c"])
+                        if dist < min_dist:
+                            min_dist = dist
                             best_dir = dir_uscita
-                            break
-                        continue
-                    tr, tc = int(target.split("_")[1]), int(target.split("_")[2])
-                    dist = abs(tr - dest["r"]) + abs(tc - dest["c"])
-                    if dist < min_dist:
-                        min_dist = dist
-                        best_dir = dir_uscita
-                if not best_dir and strade: best_dir = random.choice(list(strade.keys()))
-                if best_dir:
-                    target_info = strade[best_dir]
-                    if target_info["target"] != "OUT":
-                        auto["timestamp_arrivo"] = ora + target_info["tempo_transito"]
-                        self.client.publish(f"srs/edge/{target_info['target']}/inbox_auto", json.dumps(auto))
+
+                    if not best_dir and strade:
+                        best_dir = random.choice(list(strade.keys()))
+
+                    if best_dir:
+                        target_info = strade[best_dir]
+                        if target_info["target"] != "OUT":
+                            auto["timestamp_arrivo"] = ora + target_info.get("tempo_transito", 2)
+                            self.client.publish(
+                                f"srs/edge/{target_info['target']}/inbox_auto",
+                                json.dumps(auto),
+                            )
 
     def run(self):
         # --- CONNESSIONE INIZIALE ---
@@ -241,25 +261,31 @@ class NodoIncrocio:
                 ora_attuale = time.time()
                 if not hasattr(self, 'last_heartbeat'): self.last_heartbeat = {}
 
+                # All'interno del ciclo for d, s in self.semafori.items():
                 for d, s in self.semafori.items():
-                    # 1. DYING GASP (Silenzioso nel log, l'alert è gestito dal Controller)
+                    ultimo_invio = self.last_heartbeat.get(s['id'], 0)
+
+                    # 1. SEMAFORO GUASTO – pubblica l'offline una sola volta e poi stop
                     if s["is_faulty"]:
                         if not s.get("offline_sent", False):
-                            payload = {"colore": "OFFLINE", "auto_in_coda": 0, "green_duration": 0}
+                            payload = {
+                                "colore": "OFFLINE",
+                                "auto_in_coda": len(s["coda"]),
+                                "green_duration": 0
+                            }
                             self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
                             s["offline_sent"] = True
+                            self.last_heartbeat[s['id']] = ora_attuale
+                        # NON pubblicare più nulla: il watchdog farà scattare l'allarme dopo 30s di silenzio
                         continue
 
-                    # 2. PUBBLICAZIONE TELEMETRIA (Senza log a video)
+                    # 2. SEMAFORI SANI (normali o in GIALLO_LAMPEGGIANTE) – pubblicazione invariata
                     payload = {
-                        "colore": s["stato"], 
-                        "auto_in_coda": len(s["coda"]), 
+                        "colore": s["stato"],
+                        "auto_in_coda": len(s["coda"]),
                         "green_duration": s["green_duration"]
                     }
-                    
-                    ultimo_invio = self.last_heartbeat.get(s['id'], 0)
-                    
-                    # Pubblichiamo solo se lo stato è cambiato o ogni 10s (Heartbeat)
+
                     if payload != self.last_states.get(s['id']) or (ora_attuale - ultimo_invio) >= 10:
                         self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
                         self.last_states[s['id']] = payload

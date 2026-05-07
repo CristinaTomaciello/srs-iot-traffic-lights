@@ -2,9 +2,10 @@ networks:
   srs-net:
     driver: bridge
 
-
-
 services:
+  # =========================================================
+  # 1. DATABASE & CACHE
+  # =========================================================
   semafori-tsdb-alpha:
     image: influxdb:2.7
     container_name: semafori-tsdb-1
@@ -15,7 +16,7 @@ services:
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+      - DOCKER_INFLUXDB_INIT_PASSWORD=srs
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
@@ -23,18 +24,17 @@ services:
       - ./influxdb_alpha_data:/var/lib/influxdb2
     restart: unless-stopped
 
-  # --- DATABASE BETA ---
   semafori-tsdb-beta:
     image: influxdb:2.7
     container_name: semafori-tsdb-2
     networks:
       - srs-net
     ports:
-      - "8087:8086" # Porta esterna diversa per evitare conflitti
+      - "8087:8086"
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+      - DOCKER_INFLUXDB_INIT_PASSWORD=srs
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
@@ -42,8 +42,45 @@ services:
       - ./influxdb_beta_data:/var/lib/influxdb2
     restart: unless-stopped
 
+  redis-lock-1:
+    image: redis:alpine
+    command: redis-server --save "" --appendonly no
+    networks:
+      - srs-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
 
+  redis-lock-2:
+    image: redis:alpine
+    command: redis-server --save "" --appendonly no
+    networks:
+      - srs-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
 
+  redis-lock-3:
+    image: redis:alpine
+    command: redis-server --save "" --appendonly no
+    networks:
+      - srs-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # =========================================================
+  # 2. CORE SYSTEM (UI, Simulatore, Controller, MQTT)
+  # =========================================================
   srs-ui:
     build:
       context: .
@@ -58,8 +95,6 @@ services:
       - haproxy-2
     restart: unless-stopped
 
-
-
   srs-simulator:
     build:
       context: .
@@ -71,8 +106,6 @@ services:
       - haproxy-1
       - haproxy-2
     restart: unless-stopped
-
-
 
   srs-controller-alpha:
     build:
@@ -92,7 +125,7 @@ services:
       - redis-lock-2
       - redis-lock-3
     restart: unless-stopped
-  
+
   srs-controller-beta:
     build:
       context: .
@@ -132,8 +165,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-
-
   emqx-2:
     image: emqx:5.3
     container_name: srs-emqx-2
@@ -154,8 +185,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-
-
   haproxy-1:
     image: haproxy:2.8
     container_name: srs-haproxy-1
@@ -171,8 +200,6 @@ services:
       emqx-2:
         condition: service_healthy
     restart: unless-stopped
-
-
 
   haproxy-2:
     image: haproxy:2.8
@@ -190,38 +217,50 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  opencode-brain-a:
+  # =========================================================
+  # 3. AI LAYER (Bridge, HAProxy-AI, OpenCode)
+  # =========================================================
+  bridge-1:
     build:
-      context: ./opencode
-      dockerfile: Dockerfile.opencode
-    container_name: srs-opencode-a
+      context: .
+      dockerfile: bridge/Dockerfile.bridge
+    container_name: bridge_1
+    environment:
+      - WORKER_ID=1
+      - MQTT_BROKER=haproxy-1
+      - OPENCODE_URL_1=http://haproxy-ai-1:4096
+      - OPENCODE_URL_2=http://haproxy-ai-2:4096
     networks:
       - srs-net
-    depends_on:
-      mcp-recovery-service:
-        condition: service_healthy
-      mcp-green-duration-service:
-        condition: service_healthy
-    environment:
-      - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
 
-  opencode-brain-b:
+  bridge-2:
     build:
-      context: ./opencode
-      dockerfile: Dockerfile.opencode
-    container_name: srs-opencode-b
+      context: .
+      dockerfile: bridge/Dockerfile.bridge
+    container_name: bridge_2
+    environment:
+      - WORKER_ID=2
+      - MQTT_BROKER=haproxy-1
+      - OPENCODE_URL_1=http://haproxy-ai-1:4096
+      - OPENCODE_URL_2=http://haproxy-ai-2:4096
     networks:
       - srs-net
-    depends_on:
-      mcp-recovery-service:
-        condition: service_healthy
-      mcp-green-duration-service:
-        condition: service_healthy
-    environment:
-      - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
-  
+
+  bridge-3:
+    build:
+      context: .
+      dockerfile: bridge/Dockerfile.bridge
+    container_name: bridge_3
+    environment:
+      - WORKER_ID=3
+      - MQTT_BROKER=haproxy-1
+      - OPENCODE_URL_1=http://haproxy-ai-1:4096
+      - OPENCODE_URL_2=http://haproxy-ai-2:4096
+    networks:
+      - srs-net
+    restart: unless-stopped
 
   haproxy-ai-1:
     image: haproxy:2.8
@@ -250,45 +289,54 @@ services:
       - opencode-brain-a
       - opencode-brain-b
     restart: unless-stopped
-  
 
-  bridge-1:
+  opencode-brain-a:
     build:
-      context: .
-      dockerfile: bridge/Dockerfile.bridge
-    container_name: bridge_1
-    environment:
-      - WORKER_ID=1
-      - MQTT_BROKER=haproxy-1
+      context: ./opencode
+      dockerfile: Dockerfile.opencode
+    container_name: srs-opencode-a
     networks:
       - srs-net
+    depends_on:
+      haproxy-mcp:
+        condition: service_started
+    environment:
+      - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
 
-  bridge-2:
+  opencode-brain-b:
     build:
-      context: .
-      dockerfile: bridge/Dockerfile.bridge
-    container_name: bridge_2
-    environment:
-      - WORKER_ID=2
-      - MQTT_BROKER=haproxy-1
+      context: ./opencode
+      dockerfile: Dockerfile.opencode
+    container_name: srs-opencode-b
     networks:
       - srs-net
+    depends_on:
+      haproxy-mcp:
+        condition: service_started
+    environment:
+      - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
 
-  bridge-3:
-    build:
-      context: .
-      dockerfile: bridge/Dockerfile.bridge
-    container_name: bridge_3
-    environment:
-      - WORKER_ID=3
-      - MQTT_BROKER=haproxy-1
+  # =========================================================
+  # 4. MCP LAYER (HAProxy-MCP e Servizi MCP in Replica)
+  # =========================================================
+  haproxy-mcp:
+    image: haproxy:2.8
+    container_name: srs-haproxy-mcp
     networks:
       - srs-net
+    volumes:
+      - ./haproxy_mcp.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    expose:
+      - "8000"
+      - "8001"
+    depends_on:
+      mcp-recovery-service:
+        condition: service_healthy
+      mcp-green-duration-service:
+        condition: service_healthy
     restart: unless-stopped
-
-
 
   mcp-recovery-service:
     build:
@@ -296,8 +344,15 @@ services:
       dockerfile: mcp_servers/recovery/Dockerfile.recovery
     networks:
       - srs-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
     expose:
       - "8000"
+    environment:
+      - REDIS_URLS=redis://redis-lock-1:6379,redis://redis-lock-2:6379,redis://redis-lock-3:6379
     depends_on:
       haproxy-1:
         condition: service_started
@@ -307,17 +362,18 @@ services:
         condition: service_started
       semafori-tsdb-beta:
         condition: service_started
-    deploy:
-      replicas: 2
+      redis-lock-1:
+        condition: service_healthy
+      redis-lock-2:
+        condition: service_healthy
+      redis-lock-3:
+        condition: service_healthy
     healthcheck:
-      test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8000))" || kill 1
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8000))\""]
       interval: 10s
       timeout: 5s
-      retries: 3 
+      retries: 3
     restart: always
-      
-
-
 
   mcp-green-duration-service:
     build:
@@ -325,8 +381,15 @@ services:
       dockerfile: mcp_servers/green_duration/Dockerfile.green
     networks:
       - srs-net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
     expose:
       - "8001"
+    environment:
+      - REDIS_URLS=redis://redis-lock-1:6379,redis://redis-lock-2:6379,redis://redis-lock-3:6379
     depends_on:
       haproxy-1:
         condition: service_started
@@ -336,33 +399,22 @@ services:
         condition: service_started
       semafori-tsdb-beta:
         condition: service_started
-    deploy:
-      replicas: 2
+      redis-lock-1:
+        condition: service_healthy
+      redis-lock-2:
+        condition: service_healthy
+      redis-lock-3:
+        condition: service_healthy
     healthcheck:
-      test: python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8001))" || kill 1
-      interval: 15s      
-      timeout: 5s        
-      retries: 3         
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8001))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     restart: always
 
-  redis-lock-1:
-    image: redis:alpine
-    command: redis-server --save "" --appendonly no
-    networks:
-      - srs-net
-
-  redis-lock-2:
-    image: redis:alpine
-    command: redis-server --save "" --appendonly no
-    networks:
-      - srs-net
-
-  redis-lock-3:
-    image: redis:alpine
-    command: redis-server --save "" --appendonly no
-    networks:
-      - srs-net
-  
+  # =========================================================
+  # 5. MONITORAGGIO
+  # =========================================================
   portainer:
     image: portainer/portainer-ce:latest
     container_name: srs-portainer
@@ -393,4 +445,5 @@ volumes:
   portainer_data:
   influxdb_alpha_data:
   influxdb_beta_data:
+  ollama_data:
   grafana_data:
