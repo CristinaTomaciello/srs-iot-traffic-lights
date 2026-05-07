@@ -40,7 +40,7 @@ start_time = time.time()
 last_heartbeat_time = 0
 HEARTBEAT_INTERVAL = 10
 last_traffic_check_time = 0
-TRAFFIC_CHECK_INTERVAL = 60
+TRAFFIC_CHECK_INTERVAL = 20
 HARDWARE_CHECK_INTERVAL = 30
 
 
@@ -90,11 +90,20 @@ def on_message(client, userdata, msg):
         
         if incrocio_id not in global_state:
             global_state[incrocio_id] = {}
+            
+        old_state = global_state[incrocio_id].get(semaforo_id, {})
+        traffic_alert_sent = old_state.get("traffic_alert_sent", False)
+        
+        # LOGICA RESET: Se le auto scendono a 12 o meno, "riarmo" la trappola
+        auto_in_coda = int(dati_semaforo.get('auto_in_coda', 0))
+        if auto_in_coda <= 12:
+            traffic_alert_sent = False
         
         global_state[incrocio_id][semaforo_id] = {
             "dati": dati_semaforo,
             "last_seen": time.time(),
-            "alert_sent": False
+            "alert_sent": old_state.get("alert_sent", False),
+            "traffic_alert_sent": traffic_alert_sent
         }
 
         # <<< NOVITÀ: SCRITTURA RIDONDATA TRAMITE UTILITY >>>
@@ -194,21 +203,34 @@ try:
                 last_heartbeat_time = ora_attuale
 
             if is_simulation_active:
-                # Watchdog Hardware (Logghiamo solo l'evento critico)
                 for inc_id, semafori in global_state.items():
                     for sem_id, info in semafori.items():
+                        
+                        # --- 1. WATCHDOG HARDWARE (Nodo Morto) ---
                         secondi_silenzio = ora_attuale - info["last_seen"]
                         if secondi_silenzio > HARDWARE_CHECK_INTERVAL and not info.get("alert_sent", False):
                             log_audit(MIO_NODE_ID, "HARDWARE_ALERT", f"Nodo {sem_id} offline", level="WARNING")
                             alert_payload = {"event": "NODE_SILENCE_TIMEOUT", "node_id": sem_id, "seconds_offline": int(secondi_silenzio)}
                             client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
-                            print(f"[{MIO_NODE_ID}] ⚠️ [WATCHDOG] Nodo {sem_id} OFFLINE ({int(secondi_silenzio)}s). Alert inviato.", flush=True)
+                            print(f"[{MIO_NODE_ID}] ⚠️ [WATCHDOG HW] Nodo {sem_id} OFFLINE ({int(secondi_silenzio)}s). Alert inviato.", flush=True)
                             info["alert_sent"] = True
-
-                # Ronde del traffico (Nessun log necessario se non succede nulla)
-                if ora_attuale - last_traffic_check_time >= TRAFFIC_CHECK_INTERVAL:
-                    client.publish("srs/alerts/traffic_check", json.dumps({"event": "PROACTIVE_CHECK"}), qos=1)
-                    last_traffic_check_time = ora_attuale
+                            
+                        # --- 2. WATCHDOG TRAFFICO (Soglia Diretta > 12) ---
+                        auto_attuali = int(info["dati"].get("auto_in_coda", 0))
+                        if auto_attuali > 12 and not info.get("traffic_alert_sent", False):
+                            log_audit(MIO_NODE_ID, "TRAFFIC_ALERT", f"Coda critica su {sem_id}: {auto_attuali} auto", level="WARNING")
+                            
+                            alert_payload = {
+                                "event": "PROACTIVE_CHECK", 
+                                "target_node": sem_id, 
+                                "cars": auto_attuali
+                            }
+                            # Invio l'allarme immediato ai Bridge
+                            client.publish("srs/alerts/traffic_check", json.dumps(alert_payload), qos=1)
+                            print(f"[{MIO_NODE_ID}] 🚗 [WATCHDOG TRAFFICO] Allarme {sem_id}: {auto_attuali} auto in coda (> 12). IA Avvisata all'istante!", flush=True)
+                            
+                            # Disarmo la trappola per non spammare (si riarmerà solo quando scende <= 12)
+                            info["traffic_alert_sent"] = True
         else:
             # LOG A EVENTO: Transizione da Leader a Standby
             if ero_gia_leader:

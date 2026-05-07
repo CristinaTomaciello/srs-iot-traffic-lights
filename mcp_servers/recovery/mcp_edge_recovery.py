@@ -3,101 +3,170 @@ import sys
 import json
 import time
 import uuid
-import re  # AGGIUNTO PER LA VALIDAZIONE DI SICUREZZA
-import uvicorn
-from starlette.middleware.trustedhost import TrustedHostMiddleware
+import re
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+import redis
 from fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
-from simulator.utility.influx_utils import query_with_failover, write_dual, INFLUX_BUCKET, INFLUX_ORG, log_audit
+from simulator.utility.influx_utils import (
+    query_with_failover,
+    write_dual,
+    INFLUX_BUCKET,
+    INFLUX_ORG,
+    log_audit,
+)
 
 mcp = FastMCP("EdgeRecoveryMCP")
 
 VALID_NODE_PATTERN = re.compile(r"^INC_\d+_\d+_(NORD|SUD|EST|OVEST)$")
 
-# --- CONFIGURAZIONE MQTT ---
+REDIS_URLS = os.getenv(
+    "REDIS_URLS",
+    "redis://redis-lock-1:6379,redis://redis-lock-2:6379,redis://redis-lock-3:6379",
+).split(",")
+
+redis_client = None
+
+def connect_redis():
+    global redis_client
+    for url in REDIS_URLS:
+        url = url.strip()
+        try:
+            r = redis.Redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
+            r.ping()
+            redis_client = r
+            print(f"[MCP_RECOVERY] ✅ Redis: {url}", file=sys.stderr, flush=True)
+            return True
+        except Exception as e:
+            print(f"[MCP_RECOVERY] ❌ Redis {url}: {e}", file=sys.stderr)
+    print("[MCP_RECOVERY] ⚠️ No Redis. Lock/cache disabled.", file=sys.stderr)
+    return False
+
+connect_redis()
+
+LOCK_TTL = 10
+CACHE_TTL = 30
+
+def acquire_lock(node_id: str) -> bool:
+    if not redis_client:
+        return True
+    lock_key = f"lock:edge:{node_id}"
+    owner = f"recovery_{uuid.uuid4().hex[:8]}"
+    return bool(redis_client.set(lock_key, owner, nx=True, ex=LOCK_TTL))
+
+def cache_get(key: str):
+    if not redis_client:
+        return None
+    val = redis_client.get(f"cache:edge:{key}")
+    return val.decode() if val else None
+
+def cache_set(key: str, value: str, ttl: int = CACHE_TTL):
+    if redis_client:
+        redis_client.setex(f"cache:edge:{key}", ttl, value)
+
+# MQTT
 is_mqtt_connected = False
 
 def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     if rc == 0:
         is_mqtt_connected = True
-        print("[MCP_AGENT] Connesso al broker MQTT!", file=sys.stderr, flush=True)
+        print("[MCP_RECOVERY] ✅ MQTT connected", file=sys.stderr, flush=True)
 
 def on_disconnect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     is_mqtt_connected = False
-    print("[MCP_AGENT] Disconnesso dal broker MQTT!", file=sys.stderr, flush=True)
 
-id = f"MCP_RECOVERY_{uuid.uuid4().hex[:6]}"
-mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=id)
+server_id = f"MCP_RECOVERY_{uuid.uuid4().hex[:6]}"
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=server_id)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_disconnect = on_disconnect
 
-def connetti_mqtt_agente():
-    brokers = ["srs-haproxy-1", "srs-haproxy-2"]
-    for broker in brokers:
+def connetti_mqtt():
+    for broker in ["srs-haproxy-1", "srs-haproxy-2"]:
         try:
-            print(f"[MCP_AGENT] Tentativo di connessione a {broker}...", file=sys.stderr)
-            mqtt_client.connect(broker, 1883, 60)
+            mqtt_client.connect(broker, 1883, keepalive=5)
             mqtt_client.loop_start()
-            time.sleep(1) 
-            if is_mqtt_connected:
-                return True
+            return True
         except Exception as e:
-            print(f"[MCP_AGENT] Fallita connessione a {broker}: {e}", file=sys.stderr)
+            print(f"[MCP_RECOVERY] ❌ MQTT {broker}: {e}", file=sys.stderr)
     return False
 
-def log_mcp(emoji, message):
-    print(f"[{id}] {emoji} {message}", file=sys.stderr, flush=True)
+def log_mcp(emoji: str, message: str):
+    print(f"[{server_id}] {emoji} {message}", file=sys.stderr, flush=True)
 
-connetti_mqtt_agente()
+connetti_mqtt()
 
-# =======================================================
-# TOOL 1: TELEMETRIA
-# =======================================================
+# ============================================================
+# TOOL 1: CONSOLIDATED VALIDATION (2 queries in 1 tool)
+# ============================================================
 @mcp.tool()
-def get_node_telemetry(node_id: str) -> str:
-    """Diagnosi rapida dello stato del nodo."""
+def validate_node_for_restart(node_id: str) -> str:
+    """
+    Consolidated validation: checks both telemetry freshness and restart history.
+    Returns structured decision to avoid agent reasoning overhead.
+    
+    Returns JSON with:
+    - verdict: APPROVED | BLOCKED
+    - reason: short explanation
+    - telemetry: last status
+    - last_restart_seconds: seconds since last restart
+    """
     if not VALID_NODE_PATTERN.match(node_id):
-        return "ERRORE: ID nodo non valido. Formato richiesto: INC_X_Y o INC_X_Y_DIR."
+        return json.dumps({
+            "verdict": "BLOCKED",
+            "reason": "Invalid node ID format",
+            "telemetry": "N/A",
+            "last_restart_seconds": 0
+        })
+
+    # Check cache first
+    cached = cache_get(f"validation:{node_id}")
+    if cached:
+        return cached
 
     try:
-        query = f"""
+        # Query 1: Telemetry (check if node is really offline)
+        query_telemetry = f"""
         from(bucket: "{INFLUX_BUCKET}")
           |> range(start: -1m)
           |> filter(fn: (r) => r["_measurement"] == "stato_traffico")
-          |> filter(fn: (r) => r["direzione"] == "{node_id}") 
+          |> filter(fn: (r) => r["direzione"] == "{node_id}")
           |> last()
         """
-        result = query_with_failover(query)
-        
-        if not result:
-            return f"STATO: {node_id} è OFFLINE (nessun dato)."
+        result_telem = query_with_failover(query_telemetry)
 
-        record = result[0].records[0]
-        secondi_fa = int(time.time() - record.get_time().timestamp())
-        status = "OK" if secondi_fa < 30 else "TIMEOUT"
-        
-        return f"NODO: {node_id} | STATO: {status} ({secondi_fa}s fa) | COLORE: {record.get_value()}"
-        
-    except Exception as e:
-        log_mcp("🔥", f"Errore telemetria: {e}")
-        return f"ERRORE: Database non raggiungibile."
+        if not result_telem:
+            # Node is offline - APPROVED for restart
+            response = json.dumps({
+                "verdict": "APPROVED",
+                "reason": "Node offline (no data)",
+                "telemetry": "OFFLINE",
+                "last_restart_seconds": 999999
+            })
+            cache_set(f"validation:{node_id}", response, ttl=10)
+            return response
 
-# =======================================================
-# TOOL 2: CONTROLLO AUDIT LOG
-# =======================================================
-@mcp.tool()
-def get_last_restart_time(node_id: str) -> str:
-    """Verifica l'ultimo riavvio con logica di failover database."""
-    if not VALID_NODE_PATTERN.match(node_id):
-        return '{"error": "ID nodo non valido."}'
+        # Node has recent data - check if it's actually problematic
+        record = result_telem[0].records[0]
+        seconds_ago = int(time.time() - record.get_time().timestamp())
 
-    try:
-        query = f"""
+        if seconds_ago < 30:
+            # Fresh data = node is working fine
+            response = json.dumps({
+                "verdict": "BLOCKED",
+                "reason": "Node operational (fresh data)",
+                "telemetry": f"OK ({seconds_ago}s ago)",
+                "last_restart_seconds": 0
+            })
+            cache_set(f"validation:{node_id}", response, ttl=10)
+            return response
+
+        # Query 2: Check restart history (prevent loops)
+        query_restart = f"""
         from(bucket: "{INFLUX_BUCKET}")
           |> range(start: -1h)
           |> filter(fn: (r) => r["_measurement"] == "agent_audit")
@@ -106,59 +175,132 @@ def get_last_restart_time(node_id: str) -> str:
           |> filter(fn: (r) => r["_value"] == "RESTART")
           |> last()
         """
-        result = query_with_failover(query)
-        
-        if not result or len(result) == 0:
-            return '{"node": "' + node_id + '", "seconds_since_last_restart": 999999, "can_restart": true}'
+        result_restart = query_with_failover(query_restart)
 
-        record = result[0].records[0]
-        secondi_fa = int(time.time() - record.get_time().timestamp())
-        can_restart = "true" if secondi_fa > 60 else "false"
+        if result_restart and len(result_restart) > 0:
+            restart_record = result_restart[0].records[0]
+            seconds_since_restart = int(time.time() - restart_record.get_time().timestamp())
 
-        return f'{{"node": "{node_id}", "seconds_since_last_restart": {secondi_fa}, "can_restart": {can_restart}}}'
-        
+            if seconds_since_restart < 300:  # 5 min cooldown
+                response = json.dumps({
+                    "verdict": "BLOCKED",
+                    "reason": "Recent restart detected (loop prevention)",
+                    "telemetry": f"STALE ({seconds_ago}s ago)",
+                    "last_restart_seconds": seconds_since_restart
+                })
+                cache_set(f"validation:{node_id}", response, ttl=10)
+                return response
+
+        # All checks passed - approve restart
+        response = json.dumps({
+            "verdict": "APPROVED",
+            "reason": "Stale data + no recent restart",
+            "telemetry": f"STALE ({seconds_ago}s ago)",
+            "last_restart_seconds": 999999 if not result_restart else seconds_since_restart
+        })
+        cache_set(f"validation:{node_id}", response, ttl=10)
+        return response
+
     except Exception as e:
-        return f'{{"error": "{str(e)}"}}'
+        log_mcp("🔥", f"Validation error: {e}")
+        return json.dumps({
+            "verdict": "BLOCKED",
+            "reason": f"Database error: {str(e)}",
+            "telemetry": "ERROR",
+            "last_restart_seconds": 0
+        })
 
-# =======================================================
-# TOOL 3: ESECUZIONE
-# =======================================================
+
+# ============================================================
+# TOOL 2: EXECUTE RESTART (with lock)
+# ============================================================
 @mcp.tool()
-def restart_edge_node(node_id: str) -> str:
-    """Invia REPAIR e logga l'azione su Alpha e Beta."""
+def execute_node_restart(node_id: str) -> str:
+    """
+    Execute restart command with distributed lock and audit logging.
+    Returns simple status message.
+    """
     if not VALID_NODE_PATTERN.match(node_id):
-        return "BLOCCATO: Riavvio negato. ID nodo non valido o non autorizzato."
+        return "BLOCKED: Invalid node ID"
+
+    if not acquire_lock(node_id):
+        log_mcp("🔒", f"Lock held for {node_id}")
+        return "SKIPPED: Another replica processing"
 
     if not is_mqtt_connected:
-        if not connetti_mqtt_agente():
-            return "ERRORE: MQTT Down."
+        if not connetti_mqtt():
+            return "ERROR: MQTT unavailable"
 
     try:
         topic = f"srs/admin/node/{node_id}/fault_injection"
         mqtt_client.publish(topic, json.dumps({"type": "REPAIR"}), qos=1)
-        
+
         point = influxdb_client.Point("agent_audit") \
             .tag("node_id", node_id) \
+            .tag("mcp_instance", server_id) \
             .field("action", "RESTART")
-            
-        successo = write_dual(point, synchronous=True)
-        
-        log_mcp("🛠️", f"Riavvio inviato a {node_id}. Audit: {'✅' if successo else '❌'}")
-        log_audit("RECOVERY_MCP", "EXECUTE_REPAIR", f"Restart inviato a {node_id}", level="INFO")
-        return f"SUCCESSO: Nodo {node_id} riavviato."
+
+        success = write_dual(point, synchronous=True)
+
+        log_mcp("🛠️", f"Restart sent: {node_id} (audit: {'✅' if success else '❌'})")
+        log_audit("RECOVERY_MCP", "EXECUTE_REPAIR", f"Restart {node_id}", level="INFO")
+
+        # Clear validation cache
+        cache_set(f"validation:{node_id}", "", ttl=1)
+
+        return "SUCCESS: Restart command sent"
 
     except Exception as e:
-        log_mcp("💥", f"Fallimento restart: {e}")
-        return "ERRORE CRITICO nell'esecuzione."
+        log_mcp("💥", f"Restart failed: {e}")
+        return f"ERROR: {str(e)}"
 
-# =======================================================
-# TOOL 4: ESCALATION
-# =======================================================
+
+# ============================================================
+# TOOL 3: VERIFY POST-RESTART
+# ============================================================
+@mcp.tool()
+def verify_node_recovery(node_id: str) -> str:
+    """
+    Quick post-restart verification.
+    Returns simple status: RESTORED | PENDING | FAILED
+    """
+    if not VALID_NODE_PATTERN.match(node_id):
+        return "FAILED: Invalid node ID"
+
+    try:
+        query = f"""
+        from(bucket: "{INFLUX_BUCKET}")
+          |> range(start: -30s)
+          |> filter(fn: (r) => r["_measurement"] == "stato_traffico")
+          |> filter(fn: (r) => r["direzione"] == "{node_id}")
+          |> last()
+        """
+        result = query_with_failover(query)
+
+        if not result:
+            return "PENDING: Waiting for node to come back online"
+
+        record = result[0].records[0]
+        seconds_ago = int(time.time() - record.get_time().timestamp())
+
+        if seconds_ago < 15:
+            return f"RESTORED: Node online ({seconds_ago}s ago)"
+        else:
+            return f"PENDING: Last data {seconds_ago}s ago"
+
+    except Exception as e:
+        return f"FAILED: Verification error - {str(e)}"
+
+
+# ============================================================
+# TOOL 4: ESCALATE
+# ============================================================
 @mcp.tool()
 def escalate_to_human(node_id: str, diagnostic_summary: str) -> str:
-    """Passa il controllo all'operatore."""
-    log_mcp("🚨", f"ESCALATION RICHIESTA per {node_id}: {diagnostic_summary}")
-    return "ESCALATION COMPLETATA."
+    """Escalate to human operator."""
+    log_mcp("🚨", f"ESCALATION: {node_id} - {diagnostic_summary}")
+    log_audit("RECOVERY_MCP", "ESCALATION", f"{node_id}: {diagnostic_summary}", level="WARN")
+    return "ESCALATION COMPLETED"
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8000)
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)

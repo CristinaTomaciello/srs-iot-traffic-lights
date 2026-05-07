@@ -4,8 +4,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Installa solo le dipendenze necessarie (fastmcp include già uvicorn)
-RUN pip install --no-cache-dir fastmcp paho-mqtt influxdb-client
+RUN pip install --no-cache-dir fastmcp paho-mqtt influxdb-client redis
 
 # Crea la struttura a package (necessaria per gli import)
 RUN mkdir -p simulator/utility && touch simulator/__init__.py simulator/utility/__init__.py
