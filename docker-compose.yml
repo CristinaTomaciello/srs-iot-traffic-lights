@@ -268,7 +268,7 @@ services:
     networks:
       - srs-net
     volumes:
-      - ./haproxy_ai.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy_ai_a.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     ports:
       - "4096:4096"
     depends_on:
@@ -282,7 +282,7 @@ services:
     networks:
       - srs-net
     volumes:
-      - ./haproxy_ai.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy_ai_b.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     ports:
       - "4097:4096"
     depends_on:
@@ -297,9 +297,10 @@ services:
     container_name: srs-opencode-a
     networks:
       - srs-net
+    volumes:
+      - ./opencode/opencode_a.json:/root/.config/opencode/opencode.json:ro 
     depends_on:
-      haproxy-mcp:
-        condition: service_started
+      - haproxy-mcp-a
     environment:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
@@ -311,9 +312,10 @@ services:
     container_name: srs-opencode-b
     networks:
       - srs-net
+    volumes:
+      - ./opencode/opencode_b.json:/root/.config/opencode/opencode.json:ro 
     depends_on:
-      haproxy-mcp:
-        condition: service_started
+      - haproxy-mcp-b
     environment:
       - OPENCODE_SERVER_PASSWORD=srs
     restart: unless-stopped
@@ -321,9 +323,9 @@ services:
   # =========================================================
   # 4. MCP LAYER (HAProxy-MCP e Servizi MCP in Replica)
   # =========================================================
-  haproxy-mcp:
+  haproxy-mcp-a:
     image: haproxy:2.8
-    container_name: srs-haproxy-mcp
+    container_name: srs-haproxy-mcp-a
     networks:
       - srs-net
     volumes:
@@ -331,11 +333,34 @@ services:
     expose:
       - "8000"
       - "8001"
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
-      mcp-recovery-service:
-        condition: service_healthy
-      mcp-green-duration-service:
-        condition: service_healthy
+      - mcp-recovery-service
+      - mcp-green-duration-service
+    restart: unless-stopped
+
+  haproxy-mcp-b:
+    image: haproxy:2.8
+    container_name: srs-haproxy-mcp-b
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy_mcp.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    expose:
+      - "8000"
+      - "8001"
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - mcp-recovery-service
+      - mcp-green-duration-service
     restart: unless-stopped
 
   mcp-recovery-service:
@@ -439,6 +464,15 @@ services:
       - srs-net
     volumes:
       - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: srs-log-viewer
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - 8888:8080
     restart: unless-stopped
 
 volumes:

@@ -103,7 +103,7 @@ def on_message(client, userdata, msg):
             "dati": dati_semaforo,
             "last_seen": time.time(),
             "alert_sent": old_state.get("alert_sent", False),
-            "traffic_alert_sent": traffic_alert_sent
+            "last_traffic_alert_time": old_state.get("last_traffic_alert_time", 0) 
         }
 
         # <<< NOVITÀ: SCRITTURA RIDONDATA TRAMITE UTILITY >>>
@@ -204,33 +204,44 @@ try:
 
             if is_simulation_active:
                 for inc_id, semafori in global_state.items():
+                    # --- ESTRATTO DEL LOOP NEL CONTROLLER ---
                     for sem_id, info in semafori.items():
                         
-                        # --- 1. WATCHDOG HARDWARE (Nodo Morto) ---
+                        # 1. CALCOLO STATO DI SALUTE
                         secondi_silenzio = ora_attuale - info["last_seen"]
-                        if secondi_silenzio > HARDWARE_CHECK_INTERVAL and not info.get("alert_sent", False):
-                            log_audit(MIO_NODE_ID, "HARDWARE_ALERT", f"Nodo {sem_id} offline", level="WARNING")
-                            alert_payload = {"event": "NODE_SILENCE_TIMEOUT", "node_id": sem_id, "seconds_offline": int(secondi_silenzio)}
-                            client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
-                            print(f"[{MIO_NODE_ID}] ⚠️ [WATCHDOG HW] Nodo {sem_id} OFFLINE ({int(secondi_silenzio)}s). Alert inviato.", flush=True)
-                            info["alert_sent"] = True
+                        # Definiamo se il nodo è ufficialmente "in crash"
+                        is_node_crashed = secondi_silenzio > HARDWARE_CHECK_INTERVAL
+
+                        # --- 1. GESTIONE HARDWARE (Priorità 1) ---
+                        if is_node_crashed:
+                            if not info.get("alert_sent", False):
+                                log_audit(MIO_NODE_ID, "HARDWARE_ALERT", f"Nodo {sem_id} offline", level="WARNING")
+                                alert_payload = {"event": "NODE_SILENCE_TIMEOUT", "node_id": sem_id, "seconds_offline": int(secondi_silenzio)}
+                                client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
+                                print(f"[{MIO_NODE_ID}] ⚠️ [WATCHDOG HW] {sem_id} OFFLINE. Recovery inviata.", flush=True)
+                                
+                                info["alert_sent"] = True
+                                # IMPORTANTE: Se il nodo è rotto, resettiamo il flag del traffico 
+                                # così quando tornerà in vita potrà rifare l'allarme se serve
+                                info["traffic_alert_sent"] = False 
                             
-                        # --- 2. WATCHDOG TRAFFICO (Soglia Diretta > 12) ---
+                            # --- CRITICO: Se il nodo è in crash, saltiamo la ronda traffico ---
+                            continue 
+
+                        # --- 2. WATCHDOG TRAFFICO (Eseguito solo se il nodo è ALIVE) ---
+                        # --- 2. WATCHDOG TRAFFICO (Eseguito solo se il nodo è ALIVE) ---
                         auto_attuali = int(info["dati"].get("auto_in_coda", 0))
-                        if auto_attuali > 12 and not info.get("traffic_alert_sent", False):
-                            log_audit(MIO_NODE_ID, "TRAFFIC_ALERT", f"Coda critica su {sem_id}: {auto_attuali} auto", level="WARNING")
+                        if auto_attuali > 12:
+                            ultimo_alert = info.get("last_traffic_alert_time", 0)
                             
-                            alert_payload = {
-                                "event": "PROACTIVE_CHECK", 
-                                "target_node": sem_id, 
-                                "cars": auto_attuali
-                            }
-                            # Invio l'allarme immediato ai Bridge
-                            client.publish("srs/alerts/traffic_check", json.dumps(alert_payload), qos=1)
-                            print(f"[{MIO_NODE_ID}] 🚗 [WATCHDOG TRAFFICO] Allarme {sem_id}: {auto_attuali} auto in coda (> 12). IA Avvisata all'istante!", flush=True)
-                            
-                            # Disarmo la trappola per non spammare (si riarmerà solo quando scende <= 12)
-                            info["traffic_alert_sent"] = True
+                            # USIAMO SOLO IL TIMER! Niente più flag True/False
+                            if (ora_attuale - ultimo_alert > 40):
+                                alert_payload = {"event": "PROACTIVE_CHECK", "target_node": sem_id, "cars": auto_attuali}
+                                client.publish("srs/alerts/traffic_check", json.dumps(alert_payload), qos=1)
+                                
+                                # Aggiorniamo il timestamp
+                                info["last_traffic_alert_time"] = ora_attuale
+                                print(f"[{MIO_NODE_ID}] 🚗 [WATCHDOG TR] Allarme inviato per {sem_id}.", flush=True)
         else:
             # LOG A EVENTO: Transizione da Leader a Standby
             if ero_gia_leader:

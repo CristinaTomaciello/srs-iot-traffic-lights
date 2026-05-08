@@ -1,0 +1,119 @@
+{
+  "$schema": "https://opencode.ai/config-json",
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        "baseURL": "https://litellm-proxy-1013932759942.europe-west8.run.app",
+        "apiKey": "sk-BI1ty8WHJ-PBrVP5_ElhZA"
+      },
+      "models": {
+        "gemini-2.5-pro": {
+          "name": "Gemini 2.5 pro"
+        }
+      }
+    }
+  },
+  "server": {
+    "port": 4096,
+    "hostname": "0.0.0.0",
+    "cors": [
+      "*"
+    ]
+  },
+  "mcp": {
+    "green_duration": {
+      "type": "remote",
+      "url": "http://haproxy-mcp-a:8001/mcp",
+      "transport": "streamable-http"
+    },
+    "edge_recovery": {
+      "type": "remote",
+      "url": "http://haproxy-mcp-a:8000/mcp",
+      "transport": "streamable-http"
+    }
+  },
+  "tools": {
+    "green_duration_*": true,
+    "edge_recovery_*": true
+  },
+  "agent": {
+    "hardware-orchestrator": {
+      "mode": "primary",
+      "description": "Hardware recovery coordinator",
+      "steps": 10,
+      "textVerbosity": "low",
+      "prompt": "ROLE: Hardware Orchestrator. Target: node_id.\n\nCRITICAL: If any tool returns a connection error or 'server unavailable', stop immediately and output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Use native tools to validate and act.\n2. When finished, output ONLY this JSON format (no markdown):\n{\"node_id\": \"<id>\", \"action\": \"<REPAIR/ESCALATION>\", \"outcome\": \"<result>\"}\n\nCRITICAL: No conversational text. Do not explain your steps.",
+      "permission": {
+        "task": {
+          "policy-validator-agent": "allow",
+          "recovery-agent": "allow"
+        }
+      },
+      "tools": {
+        "policy-validator-agent": true,
+        "recovery-agent": true,
+        "edge_recovery_escalate_to_human": true
+      }
+    },
+    "policy-validator-agent": {
+      "mode": "subagent",
+      "description": "Validates node before restart",
+      "steps": 6,
+      "textVerbosity": "low",
+      "prompt": "ROLE: Policy Validator. Input: node_id.\n\nCRITICAL: If tool fails with connection error, output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Call tool 'edge_recovery_validate_node_for_restart' with node_id.\n2. Return EXACTLY the JSON received from the tool. No extra text.",
+      "tools": {
+        "edge_recovery_validate_node_for_restart": true
+      }
+    },
+    "recovery-agent": {
+      "mode": "subagent",
+      "description": "Executes restart and verifies recovery",
+      "steps": 6,
+      "textVerbosity": "low",
+      "prompt": "ROLE: Recovery Agent. Input: node_id.\n\nCRITICAL: If tool fails with connection error, output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Call tool 'edge_recovery_execute_node_restart'.\n2. Call tool 'edge_recovery_verify_node_recovery'.\n3. Return EXACTLY the verification result. No extra text.",
+      "tools": {
+        "edge_recovery_execute_node_restart": true,
+        "edge_recovery_verify_node_recovery": true
+      }
+    },
+    "traffic-orchestrator": {
+      "mode": "primary",
+      "description": "Traffic Optimization Coordinator",
+      "steps": 15,
+      "textVerbosity": "low",
+      "prompt": "ROLE: Traffic Coordinator. You DELEGATE tasks.\n\nCRITICAL FAILOVER RULE: If you do not have access to tools or if subagents report errors, you MUST output: ERROR: MCP_UNAVAILABLE and END.\n\nEXECUTION FLOW:\n1. Call native tool 'traffic-validator' passing EXACTLY the INPUT string you received.\n2. If Validator returns VERDICT: BLOCKED -> Output exactly: {\"intersection\": \"NONE\", \"action\": \"NONE\", \"reason\": \"blocked\"}. END.\n3. If Validator returns VERDICT: APPROVED -> Call native tool 'traffic-worker' passing the EXACT TARGET string.\n4. Upon Worker completion, output ONLY this pure JSON (no markdown):\n{\"final_report\": [{\"intersection\": \"<id>\", \"action\": \"OPTIMIZED\", \"reason\": \"<cars> cars\"}]}\n\nCRITICAL: Never hallucinate data. Wait for subagent tools to finish.",
+      "permission": {
+        "task": {
+          "traffic-validator": "allow",
+          "traffic-worker": "allow"
+        }
+      },
+      "tools": {
+        "traffic-validator": true,
+        "traffic-worker": true
+      }
+    },
+    "traffic-validator": {
+      "mode": "subagent",
+      "description": "Traffic condition validator",
+      "steps": 6,
+      "textVerbosity": "low",
+      "prompt": "ROLE: Traffic condition validator.\n\nCRITICAL: If tool 'green_duration_check_lock' is unavailable, output: ERROR: MCP_UNAVAILABLE.\n\nEXECUTION FLOW:\n1. Extract Target ID (e.g., INC_0_0_NORD) and car count.\n2. Extract Base ID (e.g., INC_0_0).\n3. Call tool 'green_duration_check_lock' with Base ID.\n4. If LOCKED, return: \"VERDICT: BLOCKED \\n REASON: Node locked\".\n5. If UNLOCKED, return:\nVERDICT: APPROVED\nTARGET: {\"id\": \"<exact_target_id>\", \"cars\": <car_count>}",
+      "tools": {
+        "green_duration_check_lock": true
+      }
+    },
+    "traffic-worker": {
+      "mode": "subagent",
+      "description": "Traffic optimization executor",
+      "steps": 6,
+      "textVerbosity": "low",
+      "prompt": "ROLE: Traffic optimization executor.\n\nCRITICAL: If tool 'green_duration_optimize_node' fails, output: ERROR: MCP_UNAVAILABLE.\n\nEXECUTION FLOW:\n1. Extract target 'id' and 'cars'.\n2. EVALUATE:\n   - DURATION: (15 + (cars * 1.5)). Max 35s.\n   - CYCLES: cars <= 20: 1 | 21-30: 2 | >30: 3.\n3. Call tool 'green_duration_optimize_node' with calculated 'duration' and 'cycles'.\n4. Return EXACTLY the output of the tool.",
+      "tools": {
+        "green_duration_optimize_node": true
+      }
+    }
+  }
+}
