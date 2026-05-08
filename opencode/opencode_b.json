@@ -6,7 +6,7 @@
       "name": "LiteLLM",
       "options": {
         "baseURL": "https://litellm-proxy-1013932759942.europe-west8.run.app",
-        "apiKey": "Inserire chiave API qui"
+        "apiKey": "sk-BI1ty8WHJ-PBrVP5_ElhZA"
       },
       "models": {
         "gemini-2.5-pro": {
@@ -25,12 +25,12 @@
   "mcp": {
     "green_duration": {
       "type": "remote",
-      "url": "http://srs-haproxy-mcp:8001/mcp",
+      "url": "http://haproxy-mcp-b:8001/mcp",
       "transport": "streamable-http"
     },
     "edge_recovery": {
       "type": "remote",
-      "url": "http://srs-haproxy-mcp:8000/mcp",
+      "url": "http://haproxy-mcp-b:8000/mcp",
       "transport": "streamable-http"
     }
   },
