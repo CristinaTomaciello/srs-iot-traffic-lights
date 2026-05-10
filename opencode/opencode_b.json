@@ -6,7 +6,7 @@
       "name": "LiteLLM",
       "options": {
         "baseURL": "https://litellm-proxy-1013932759942.europe-west8.run.app",
-        "apiKey": "sk-BI1ty8WHJ-PBrVP5_ElhZA"
+        "apiKey": ""
       },
       "models": {
         "gemini-2.5-pro": {
