@@ -44,7 +44,7 @@
       "description": "Hardware recovery coordinator",
       "steps": 10,
       "textVerbosity": "low",
-      "prompt": "ROLE: Hardware Orchestrator. Target: node_id.\n\nFLOW:\n1. Use native tools to validate and act.\n2. When finished, output ONLY this JSON format (no markdown):\n{\"node_id\": \"<id>\", \"action\": \"<REPAIR/ESCALATION>\", \"outcome\": \"<result>\"}\n\nCRITICAL: No conversational text. Do not explain your steps.",
+      "prompt": "ROLE: Hardware Orchestrator. Target: node_id.\n\nCRITICAL: If any tool returns a connection error or 'server unavailable', stop immediately and output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Use native tools to validate and act.\n2. When finished, output ONLY this JSON format (no markdown):\n{\"node_id\": \"<id>\", \"action\": \"<REPAIR/ESCALATION/RETRY/SUCCESS>\", \"outcome\": \"<result>\"}\n\nCRITICAL RULE: If the node is locked or skipped (LOCKED/SKIPPED) for technical reasons, output 'action': 'RETRY'. If the tool indicates the node is already OPERATIONAL or OK, output 'action': 'SUCCESS'. No conversational text.",
       "permission": {
         "task": {
           "policy-validator-agent": "allow",
@@ -62,7 +62,7 @@
       "description": "Validates node before restart",
       "steps": 6,
       "textVerbosity": "low",
-      "prompt": "ROLE: Policy Validator. Input: node_id.\n\nFLOW:\n1. Call tool 'edge_recovery_validate_node_for_restart' with node_id.\n2. Return EXACTLY the JSON received from the tool. No extra text.",
+      "prompt": "ROLE: Policy Validator. Input: node_id.\n\nCRITICAL: If tool fails with connection error, output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Call tool 'edge_recovery_validate_node_for_restart' with node_id.\n2. Return EXACTLY the JSON received from the tool. No extra text.",
       "tools": {
         "edge_recovery_validate_node_for_restart": true
       }
@@ -72,7 +72,7 @@
       "description": "Executes restart and verifies recovery",
       "steps": 6,
       "textVerbosity": "low",
-      "prompt": "ROLE: Recovery Agent. Input: node_id.\n\nFLOW:\n1. Call tool 'edge_recovery_execute_node_restart'.\n2. Call tool 'edge_recovery_verify_node_recovery'.\n3. Return EXACTLY the verification result. No extra text.",
+      "prompt": "ROLE: Recovery Agent. Input: node_id.\n\nCRITICAL: If tool fails with connection error, output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Call tool 'edge_recovery_execute_node_restart'.\n2. Call tool 'edge_recovery_verify_node_recovery'.\n3. Return EXACTLY the verification result. No extra text.",
       "tools": {
         "edge_recovery_execute_node_restart": true,
         "edge_recovery_verify_node_recovery": true
@@ -83,7 +83,7 @@
       "description": "Traffic Optimization Coordinator",
       "steps": 15,
       "textVerbosity": "low",
-      "prompt": "ROLE: Traffic Coordinator. You DELEGATE tasks.\n\nCRITICAL ANTI-HALLUCINATION RULE: You MUST NOT generate the 'final_report' JSON immediately. If you do not have access to the 'traffic-validator' tool, you MUST output: {\"error\": \"Tools offline\"} and END.\n\nEXECUTION FLOW:\n1. Call native tool 'traffic-validator' passing EXACTLY the INPUT string you received (e.g., [REATTIVO] Emergenza su...).\n2. If Validator returns VERDICT: BLOCKED -> Output exactly: {\"intersection\": \"NONE\", \"action\": \"NONE\", \"reason\": \"blocked\"}. END.\n3. If Validator returns VERDICT: APPROVED -> Call native tool 'traffic-worker' passing the EXACT TARGET string. Do NOT alter data.\n4. Upon Worker completion, output ONLY this pure JSON (no markdown):\n{\"final_report\": [{\"intersection\": \"<id>\", \"action\": \"OPTIMIZED\", \"reason\": \"<cars> cars\"}]}\n\nCRITICAL: Never hallucinate data. Wait for subagent tools to finish before generating the final JSON.",
+      "prompt": "ROLE: Traffic Coordinator - DELEGATE ONLY.\n\nRULES:\n1. Call 'traffic-validator' with the exact input received\n2. Parse validator response:\n   - If 'VERDICT: BLOCKED' → Output {\"action\": \"SKIPPED\", \"reason\": \"<validator reason>\"} and STOP\n   - If 'VERDICT: APPROVED' → Extract the TARGET JSON and call 'traffic-worker' with it\n3. Return worker's final JSON output WITHOUT modifications\n4. If any agent returns ERROR or MCP_UNAVAILABLE → Output {\"action\": \"ERROR\", \"reason\": \"MCP failure\"} and STOP",
       "permission": {
         "task": {
           "traffic-validator": "allow",
@@ -95,22 +95,24 @@
         "traffic-worker": true
       }
     },
+
     "traffic-validator": {
       "mode": "subagent",
       "description": "Traffic condition validator",
-      "steps": 6,
+      "steps": 8,
       "textVerbosity": "low",
-      "prompt": "ROLE: Traffic condition validator.\n\nEXECUTION FLOW:\n1. Extract the specific Target ID (e.g., INC_0_0_NORD) and the number of cars from the input string.\n2. Extract the Base ID from the Target ID (e.g., INC_0_0_NORD -> INC_0_0).\n3. Call tool 'green_duration_check_lock' passing the Base ID.\n4. If the tool returns 'LOCKED', return EXACTLY: \"VERDICT: BLOCKED \\n REASON: Node locked or in cooldown\". END.\n5. If the tool returns 'UNLOCKED', return EXACTLY:\nVERDICT: APPROVED\nTARGET: {\"id\": \"<exact_target_id>\", \"cars\": <car_count>}\n\nCRITICAL: Do not invent data. Extract strictly from the prompt.",
+      "prompt": "ROLE: Traffic Validator - Extract base ID and check conditions.\n\nFLOW:\n1. Extract Base ID (format: INC_X_Y) from input\n2. Call 'green_duration_check_lock' with Base ID\n3. Parse tool response (format: STATUS|reason=X|cars=Y|ts=Z):\n   - If STATUS is 'LOCKED':\n     * reason=cooldown → Output: VERDICT: BLOCKED | REASON: Cooldown active\n     * reason=low_traffic → Output: VERDICT: BLOCKED | REASON: Traffic too low (X cars)\n     * reason=error → Output: VERDICT: BLOCKED | REASON: Telemetry error\n   - If STATUS is 'UNLOCKED':\n     * Extract 'cars' value from response\n     * Extract original target_id from input (format: INC_X_Y_DIRECTION)\n     * Output EXACTLY:\nVERDICT: APPROVED\nTARGET: {\"id\": \"<target_id>\", \"cars\": <cars_number>}\n\nEXAMPLE:\nInput: INC_1_4_NORD\nTool returns: UNLOCKED|reason=traffic_detected|cars=42|ts=1234567890\nYour output:\nVERDICT: APPROVED\nTARGET: {\"id\": \"INC_1_4_NORD\", \"cars\": 42}",
       "tools": {
         "green_duration_check_lock": true
       }
     },
+
     "traffic-worker": {
       "mode": "subagent",
       "description": "Traffic optimization executor",
-      "steps": 6,
+      "steps": 8,
       "textVerbosity": "low",
-      "prompt": "ROLE: Traffic optimization executor.\n\nEXECUTION FLOW:\n1. Extract the target 'id' and 'cars' from the input.\n2. Act as a Traffic Engineer and EVALUATE the optimal green duration and cycles:\n   - DURATION: Calculate (15 + (cars * 1.5)). Cap at a MAXIMUM of 35 seconds to avoid starvation.\n   - CYCLES: If cars <= 20 -> 1 cycle. If cars 21-30 -> 2 cycles. If cars > 30 -> 3 cycles.\n3. Call tool 'green_duration_optimize_node' passing 'target_id', 'duration', and 'cycles' as distinct parameters.\n4. Return EXACTLY the plain text report received from the tool.\n\nCRITICAL: You must pass the calculated values to the tool, do not use default placeholders.",
+      "prompt": "ROLE: Traffic Optimizer - Calculate parameters and execute.\n\nFLOW:\n1. Receive TARGET JSON with 'id' and 'cars'\n2. Apply scaling logic:\n   - cars < 10 → STOP, return {\"action\": \"SKIPPED\", \"reason\": \"Insufficient traffic (<10 cars)\"}\n   - 10-25 cars → duration=28, cycles=2\n   - 26-45 cars → duration=33, cycles=3\n   - 46-70 cars → duration=38, cycles=4\n   - cars > 70 → duration=40, cycles=4\n3. Call 'green_duration_optimize_node' with:\n   - target_id = id from TARGET\n   - duration = calculated value\n   - cycles = calculated value\n4. Parse tool response (JSON format):\n   - If status=SUCCESS → Output {\"action\": \"OPTIMIZED\", \"intersection\": \"<id>\", \"duration\": X, \"cycles\": Y, \"cars\": Z}\n   - If status=ERROR → Output {\"action\": \"ERROR\", \"reason\": \"<error reason>\"}\n\nEXAMPLE:\nInput: {\"id\": \"INC_1_4_NORD\", \"cars\": 42}\nCalculation: 42 cars → duration=38, cycles=4\nTool returns: {\"status\": \"SUCCESS\", \"intersection\": \"INC_1_4_NORD\", \"duration\": 38, \"cycles\": 4}\nYour output: {\"action\": \"OPTIMIZED\", \"intersection\": \"INC_1_4_NORD\", \"duration\": 38, \"cycles\": 4, \"cars\": 42}",
       "tools": {
         "green_duration_optimize_node": true
       }

@@ -11,7 +11,6 @@ import redis
 # 1. CONFIGURAZIONE PERCORSI E UTILITY
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import simulator.utility.mqtt_utils as utils
-# Importiamo la logica di scrittura ridondata e le costanti
 from simulator.utility.influx_utils import write_dual, INFLUX_BUCKET, INFLUX_ORG ,log_audit
 
 # --- IDENTIFICATIVO E REDLOCK ---
@@ -20,18 +19,15 @@ LOCK_KEY = "srs_controller_leader"
 LOCK_TTL = 10
 HEARTBEAT_TOPIC = "srs/system/survival_heartbeat"
 
-# Stato della Leadership
 ero_gia_leader = False
 ultimo_heartbeat_leader_ricevuto = time.time()
 
-# --- CONNESSIONI REDIS ---
 redis_nodes = [
     redis.Redis(host='redis-lock-1', port=6379, db=0, decode_responses=True, socket_timeout=1),
     redis.Redis(host='redis-lock-2', port=6379, db=0, decode_responses=True, socket_timeout=1),
     redis.Redis(host='redis-lock-3', port=6379, db=0, decode_responses=True, socket_timeout=1)
 ]
 
-# --- STATO GLOBALE DEL CONTROLLER ---
 is_mqtt_connected = False
 is_simulation_active = False
 global_state = {}
@@ -40,15 +36,29 @@ start_time = time.time()
 last_heartbeat_time = 0
 HEARTBEAT_INTERVAL = 10
 last_traffic_check_time = 0
-TRAFFIC_CHECK_INTERVAL = 20
+TRAFFIC_CHECK_INTERVAL = 60
 HARDWARE_CHECK_INTERVAL = 30
 
+# -------------------------------------------------------------------
+# LOGGING SYSTEM PER IL CONTROLLER
+# -------------------------------------------------------------------
+def log_system(emoji: str, event_type: str, message: str, level="INFO"):
+    print(f"[{MIO_NODE_ID}] {emoji} {message}", flush=True)
+    try:
+        point = influxdb_client.Point("system_logs") \
+            .tag("service", "MainController") \
+            .tag("worker", MIO_NODE_ID) \
+            .tag("level", level) \
+            .field("event_type", event_type) \
+            .field("message", message)
+        write_dual(point, synchronous=False)
+    except: pass
 
 def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     if rc == 0:
         is_mqtt_connected = True
-        print(f"[{MIO_NODE_ID}] Central Controller online!", flush=True)
+        log_system("🌐", "NETWORK", "Central Controller online!")
         client.subscribe("srs/edge/+/+/stato")
         client.subscribe("srs/admin/control")
         client.subscribe(HEARTBEAT_TOPIC)
@@ -56,22 +66,20 @@ def on_connect(client, userdata, flags, rc, properties):
 def on_message(client, userdata, msg):
     global is_simulation_active, last_traffic_check_time, ultimo_heartbeat_leader_ricevuto, ero_gia_leader
     try:
-        # 1. GESTIONE SURVIVAL HEARTBEAT (P2P MQTT)
         if msg.topic == HEARTBEAT_TOPIC:
             sender_id = msg.payload.decode('utf-8')
             ultimo_heartbeat_leader_ricevuto = time.time()
             if ero_gia_leader and sender_id != MIO_NODE_ID:
-                print(f"[{MIO_NODE_ID}] ⚠️ SPLIT-BRAIN EVITATO! Nodo {sender_id} è il vero Leader. Mi dimetto.")
+                log_system("⚠️", "LEADERSHIP", f"SPLIT-BRAIN EVITATO! Nodo {sender_id} è il vero Leader. Mi dimetto.", level="WARN")
                 ero_gia_leader = False
             return
 
-        # 2. GESTIONE COMANDI SIMULAZIONE
         if msg.topic == "srs/admin/control":
             payload = json.loads(msg.payload.decode('utf-8'))
             comando = payload.get("command")
             if comando == "START":
                 is_simulation_active = True
-                print(f"[{MIO_NODE_ID}] Simulazione AVVIATA.")
+                log_system("🚀", "SIMULATION", "Simulazione AVVIATA.")
                 ora = time.time()
                 last_traffic_check_time = ora 
                 for inc_id in global_state:
@@ -79,10 +87,9 @@ def on_message(client, userdata, msg):
                         global_state[inc_id][sem_id]["last_seen"] = ora
             elif comando == "PAUSE":
                 is_simulation_active = False
-                print(f"[{MIO_NODE_ID}] Simulazione IN PAUSA.")
+                log_system("⏸️", "SIMULATION", "Simulazione IN PAUSA.")
             return
         
-        # 3. ELABORAZIONE DATI TRAFFICO
         parti_topic = msg.topic.split("/")
         incrocio_id = parti_topic[2]
         semaforo_id = parti_topic[3]
@@ -94,9 +101,8 @@ def on_message(client, userdata, msg):
         old_state = global_state[incrocio_id].get(semaforo_id, {})
         traffic_alert_sent = old_state.get("traffic_alert_sent", False)
         
-        # LOGICA RESET: Se le auto scendono a 12 o meno, "riarmo" la trappola
         auto_in_coda = int(dati_semaforo.get('auto_in_coda', 0))
-        if auto_in_coda <= 12:
+        if auto_in_coda <= 15:
             traffic_alert_sent = False
         
         global_state[incrocio_id][semaforo_id] = {
@@ -106,7 +112,6 @@ def on_message(client, userdata, msg):
             "last_traffic_alert_time": old_state.get("last_traffic_alert_time", 0) 
         }
 
-        # <<< NOVITÀ: SCRITTURA RIDONDATA TRAMITE UTILITY >>>
         if ero_gia_leader:
             punto_storico = influxdb_client.Point("stato_traffico") \
                 .tag("incrocio", incrocio_id) \
@@ -114,30 +119,22 @@ def on_message(client, userdata, msg):
                 .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
                 .field("colore", dati_semaforo.get('colore', 'UNKNOWN')) \
                 .field("durata_verde", int(dati_semaforo.get('green_duration', 0)))
-            
-            # Scrittura asincrona per massimizzare le performance del controller
             write_dual(punto_storico, synchronous=False)
         
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError: pass
     except Exception as e:
-        if ero_gia_leader:
-            print(f"Errore salvataggio DB: {e}")
+        if ero_gia_leader: log_system("🔥", "ERROR", f"Errore salvataggio DB: {e}", level="ERROR")
 
 def on_disconnect(client, userdata, flags, rc, properties):
     global is_mqtt_connected, ero_gia_leader
     is_mqtt_connected = False
     ero_gia_leader = False
-    print(f"[{MIO_NODE_ID}] Connessione persa! Avvio failover...")
+    log_system("⚠️", "NETWORK", "Connessione persa! Avvio failover...", level="WARN")
 
 def check_controller_connection():
     return is_mqtt_connected
 
 def valuta_leadership(client_mqtt):
-    """
-    Ritorna True se il nodo deve agire come Leader.
-    Rimosso l'aggiornamento della variabile globale per gestire il log a evento nel loop.
-    """
     voti_favorevoli = 0
     for r in redis_nodes:
         try:
@@ -148,28 +145,19 @@ def valuta_leadership(client_mqtt):
             else:
                 if r.set(LOCK_KEY, MIO_NODE_ID, nx=True, ex=LOCK_TTL):
                     voti_favorevoli += 1
-        except Exception:
-            pass
+        except Exception: pass
 
-    # Caso 1: Quorum raggiunto
     if voti_favorevoli >= 2:
         client_mqtt.publish(HEARTBEAT_TOPIC, MIO_NODE_ID, qos=0)
         return True
-
-    # Caso 2: Survival Mode (Redis parzialmente giù ma eravamo già leader)
     if voti_favorevoli < 2 and ero_gia_leader:
-        # Non stampiamo nulla qui per evitare spam se Redis fluttua
         client_mqtt.publish(HEARTBEAT_TOPIC, MIO_NODE_ID, qos=0)
         return True
-
-    # Caso 3: Usurpazione (Leader precedente sparito da MQTT)
     tempo_silenzio = time.time() - ultimo_heartbeat_leader_ricevuto
     if voti_favorevoli < 2 and not ero_gia_leader and tempo_silenzio > 12: 
         return True
-
     return False
 
-# --- SETUP E AVVIO ---
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"CTRL_{MIO_NODE_ID}")
 client.on_connect = on_connect
 client.on_message = on_message
@@ -178,25 +166,19 @@ client.on_disconnect = on_disconnect
 print(f"Inizializzazione del Controller {MIO_NODE_ID} in HA...", flush=True)
 utils.connetti_con_failover(client, f"CTRL_{MIO_NODE_ID}", check_controller_connection)
 
-# --- LOOP PRINCIPALE ---
 try:
     while True:
         ora_attuale = time.time()
-
         if not check_controller_connection():
             utils.connetti_con_failover(client, f"CTRL_{MIO_NODE_ID}", check_controller_connection)
 
-        # Determiniamo lo stato attuale
         is_leader_now = valuta_leadership(client)
 
         if is_leader_now:
-            # LOG A EVENTO: Transizione da Standby a Leader
             if not ero_gia_leader:
-                print(f"[{MIO_NODE_ID}] 👑 Leadership ACQUISITA. Monitoraggio attivo.", flush=True)
-                log_audit(MIO_NODE_ID, "LEADERSHIP", "Leadership acquisita", level="INFO")
+                log_system("👑", "LEADERSHIP", "Leadership ACQUISITA. Monitoraggio attivo.")
                 ero_gia_leader = True
 
-            # Operazioni del Leader
             if ora_attuale - last_heartbeat_time >= HEARTBEAT_INTERVAL:
                 heartbeat_payload = {"component": "main_controller", "status": "ONLINE", "leader_id": MIO_NODE_ID, "uptime": int(ora_attuale - start_time)}
                 client.publish("srs/controller/heartbeat", json.dumps(heartbeat_payload), qos=0)
@@ -204,48 +186,30 @@ try:
 
             if is_simulation_active:
                 for inc_id, semafori in global_state.items():
-                    # --- ESTRATTO DEL LOOP NEL CONTROLLER ---
                     for sem_id, info in semafori.items():
-                        
-                        # 1. CALCOLO STATO DI SALUTE
                         secondi_silenzio = ora_attuale - info["last_seen"]
-                        # Definiamo se il nodo è ufficialmente "in crash"
                         is_node_crashed = secondi_silenzio > HARDWARE_CHECK_INTERVAL
 
-                        # --- 1. GESTIONE HARDWARE (Priorità 1) ---
                         if is_node_crashed:
                             if not info.get("alert_sent", False):
-                                log_audit(MIO_NODE_ID, "HARDWARE_ALERT", f"Nodo {sem_id} offline", level="WARNING")
+                                log_system("⚠️", "WATCHDOG_HW", f"{sem_id} OFFLINE. Recovery inviata.", level="WARN")
                                 alert_payload = {"event": "NODE_SILENCE_TIMEOUT", "node_id": sem_id, "seconds_offline": int(secondi_silenzio)}
                                 client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
-                                print(f"[{MIO_NODE_ID}] ⚠️ [WATCHDOG HW] {sem_id} OFFLINE. Recovery inviata.", flush=True)
-                                
                                 info["alert_sent"] = True
-                                # IMPORTANTE: Se il nodo è rotto, resettiamo il flag del traffico 
-                                # così quando tornerà in vita potrà rifare l'allarme se serve
                                 info["traffic_alert_sent"] = False 
-                            
-                            # --- CRITICO: Se il nodo è in crash, saltiamo la ronda traffico ---
                             continue 
 
-                        # --- 2. WATCHDOG TRAFFICO (Eseguito solo se il nodo è ALIVE) ---
-                        # --- 2. WATCHDOG TRAFFICO (Eseguito solo se il nodo è ALIVE) ---
                         auto_attuali = int(info["dati"].get("auto_in_coda", 0))
-                        if auto_attuali > 12:
+                        if auto_attuali > 15:
                             ultimo_alert = info.get("last_traffic_alert_time", 0)
-                            
-                            # USIAMO SOLO IL TIMER! Niente più flag True/False
-                            if (ora_attuale - ultimo_alert > 40):
+                            if (ora_attuale - ultimo_alert > 120):
                                 alert_payload = {"event": "PROACTIVE_CHECK", "target_node": sem_id, "cars": auto_attuali}
                                 client.publish("srs/alerts/traffic_check", json.dumps(alert_payload), qos=1)
-                                
-                                # Aggiorniamo il timestamp
                                 info["last_traffic_alert_time"] = ora_attuale
                                 print(f"[{MIO_NODE_ID}] 🚗 [WATCHDOG TR] Allarme inviato per {sem_id}.", flush=True)
         else:
-            # LOG A EVENTO: Transizione da Leader a Standby
             if ero_gia_leader:
-                print(f"[{MIO_NODE_ID}] 💤 Leadership CEDUTA. In ascolto...", flush=True)
+                log_system("💤", "LEADERSHIP", "Leadership CEDUTA. In ascolto...")
                 ero_gia_leader = False
 
         time.sleep(1)
@@ -254,5 +218,3 @@ except KeyboardInterrupt:
     print("\nSpegnimento del Controller in corso...")
     client.loop_stop()
     client.disconnect()
-    # Non è più necessario chiudere manualmente i client Influx qui, 
-    # poiché l'utility usa il context manager 'with' per ogni scrittura.

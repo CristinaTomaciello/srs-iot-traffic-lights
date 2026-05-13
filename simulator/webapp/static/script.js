@@ -247,6 +247,78 @@ function crashNode() {
     .catch(error => console.error("Errore di rete:", error));
 }
 
+// ==========================================
+// SCENARI AUTOMATIZZATI (Aggiunta per Control Room)
+// ==========================================
+async function runScenario() {
+    console.log("Richiesta avvio scenario inviata...");
+    
+    const scenario = document.getElementById('scenario-selector').value;
+    const status = document.getElementById('scenario-status');
+    
+    // Leggiamo gli ID degli incroci direttamente dal menu a tendina che funziona già
+    const selectElement = document.getElementById('inj-incrocio');
+    const allIncrociIds = Array.from(selectElement.options).map(opt => opt.value);
+
+    if (allIncrociIds.length === 0) {
+        if(status) status.innerText = "❌ ERRORE: Mappa non caricata";
+        return;
+    }
+
+    if(status) status.innerText = "🚀 SCENARIO IN CORSO...";
+
+    // Scenario Tsunami o Apocalisse
+    if (scenario === 'tsunami' || scenario === 'apocalypse') {
+        for (const id of allIncrociIds) {
+            const numAuto = Math.floor(Math.random() * 41) + 40; // Genera tra 40 e 80
+            const dir = Math.random() > 0.5 ? "NORD" : "EST";
+            
+            console.log(`🌊 Tsunami: Inietto ${numAuto} auto su ${id}_${dir}`);
+            
+            // Usiamo la stessa identica API della tua funzione injectCars() funzionante
+            fetch('/api/admin/inject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ incrocio: id, direzione: dir, count: numAuto })
+            }).catch(e => console.error("Errore fetch Tsunami:", e));
+            
+            await new Promise(r => setTimeout(r, 150)); 
+        }
+    }
+
+    // Scenario Chaos o Apocalisse
+    if (scenario === 'chaos' || scenario === 'apocalypse') {
+        const numCrashes = scenario === 'apocalypse' ? 4 : 3;
+        let bersagliDisponibili = [...allIncrociIds];
+
+        for (let i = 0; i < numCrashes; i++) {
+            if (bersagliDisponibili.length === 0) break;
+
+            const randomIndex = Math.floor(Math.random() * bersagliDisponibili.length);
+            const randomInc = bersagliDisponibili[randomIndex];
+            
+            // Rimuoviamo il bersaglio per non colpirlo due volte
+            bersagliDisponibili.splice(randomIndex, 1);
+
+            const randomDir = ["NORD", "SUD", "EST", "OVEST"][Math.floor(Math.random() * 4)];
+            
+            console.log(`💥 Chaos: Abbattimento di ${randomInc}_${randomDir}`);
+            
+            // Usiamo la stessa identica API della tua funzione crashNode() funzionante
+            fetch('/api/admin/crash', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ incrocio: randomInc, direzione: randomDir })
+            }).catch(e => console.error("Errore fetch Chaos:", e));
+            
+            await new Promise(r => setTimeout(r, 3000)); // Aspetta 3 secondi tra un crash e l'altro
+        }
+    }
+
+    if(status) status.innerText = "✅ SCENARIO COMPLETATO";
+    setTimeout(() => { if(status) status.innerText = ""; }, 5000);
+}
+
 
 setInterval(() => {
     const NOW = Date.now();

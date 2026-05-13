@@ -112,6 +112,11 @@ class NodoIncrocio:
 
             elif "inbox_auto" in msg.topic:
                 dir_name = msg.topic.split("/")[2].split("_")[-1]
+                # Assicuriamoci che l'auto abbia hop_count e max_hops
+                if "hop_count" not in payload:
+                    payload["hop_count"] = 0
+                if "max_hops" not in payload:
+                    payload["max_hops"] = 6
                 self.semafori[dir_name]["auto_in_arrivo"].append(payload)
 
             elif f"srs/admin/inject/{self.id}" == msg.topic:
@@ -128,7 +133,9 @@ class NodoIncrocio:
             s["coda"].append({
                 "id": f"car_{uuid.uuid4().hex[:4]}",
                 "timestamp_arrivo": time.time(),
-                "destinazione": {"r": random.randint(0, 3), "c": random.randint(0, 7)}
+                "destinazione": {"r": random.randint(0, 3), "c": random.randint(0, 7)},
+                "hop_count": 0,  # Contatore hop
+                "max_hops": random.randint(3, 6)  # Limite casuale tra 3-6 hop
             })
 
     def aggiorna_logica_luci(self):
@@ -187,11 +194,7 @@ class NodoIncrocio:
             if s["is_faulty"]:
                 continue
 
-            # 1. Generazione auto ai bordi (identico a prima)
-            if s["config"].get("is_border") and random.random() < 0.02:
-                self.genera_auto(d)
-
-            # 2. Ricezione auto in arrivo (identico a prima)
+            # 2. Ricezione auto in arrivo
             for a in list(s["auto_in_arrivo"]):
                 if ora >= a["timestamp_arrivo"]:
                     s["coda"].append(a)
@@ -203,35 +206,57 @@ class NodoIncrocio:
             )
 
             if puo_smaltire and s["coda"]:
-                rate = 4.0 if (any_faulty and s["stato"] == "GIALLO_LAMPEGGIANTE") else 2.0
+                rate = 4.0 if (any_faulty and s["stato"] == "GIALLO_LAMPEGGIANTE") else 1.0
                 ultimo = self.smaltimento_times.get(d, 0)
                 if ora - ultimo >= rate:
                     self.smaltimento_times[d] = ora
                     auto = s["coda"].pop(0)
                     dest = auto["destinazione"]
+                    curr_r, curr_c = map(int, self.id.split("_")[1:])
+                    
+                    # Incrementa hop count
+                    auto["hop_count"] = auto.get("hop_count", 0) + 1
+                    max_hops = auto.get("max_hops", 3)
+                    
+                    # ✅ CONDIZIONE 1: Raggiunto destinazione
+                    if dest["r"] == curr_r and dest["c"] == curr_c:
+                        continue  # Auto arrivata, la rimuoviamo
+                    
+                    # ✅ CONDIZIONE 2: Superato limite hop → forza uscita
+                    if auto["hop_count"] >= max_hops:
+                        strade = s["config"].get("strade_uscita", {})
+                        uscite_bordo = [d for d, info in strade.items() if info["target"] == "OUT"]
+                        if uscite_bordo:
+                            # Esce dalla prima uscita disponibile
+                            continue
+                        # Se non ci sono uscite, prova a mandare verso il bordo più vicino
+                        # (questa è una safety, non dovrebbe succedere in una griglia ben formata)
 
-                    # 4. Instradamento (identico a prima)
+                    # 4. Instradamento normale
                     best_dir = None
                     min_dist = 9999
                     strade = s["config"].get("strade_uscita", {})
+                    
                     for dir_uscita, info in strade.items():
                         target = info["target"]
+                        
+                        # ✅ PRIORITÀ MASSIMA: Se sono al bordo ed esiste un'uscita, USALA
                         if target == "OUT":
-                            r, c = int(self.id.split("_")[1]), int(self.id.split("_")[2])
-                            dist = abs(r - dest["r"]) + abs(c - dest["c"])
-                            if dist <= 1:
-                                best_dir = dir_uscita
-                                break
-                            continue
+                            best_dir = dir_uscita
+                            break  # Esci subito, questa è la priorità massima
+                        
+                        # Calcolo distanza verso il target
                         tr, tc = int(target.split("_")[1]), int(target.split("_")[2])
                         dist = abs(tr - dest["r"]) + abs(tc - dest["c"])
                         if dist < min_dist:
                             min_dist = dist
                             best_dir = dir_uscita
 
+                    # Fallback: se non c'è nessuna direzione valida, scegline una casuale
                     if not best_dir and strade:
                         best_dir = random.choice(list(strade.keys()))
 
+                    # Invio dell'auto
                     if best_dir:
                         target_info = strade[best_dir]
                         if target_info["target"] != "OUT":
@@ -276,7 +301,6 @@ class NodoIncrocio:
                             self.client.publish(f"srs/edge/{self.id}/{s['id']}/stato", json.dumps(payload))
                             s["offline_sent"] = True
                             self.last_heartbeat[s['id']] = ora_attuale
-                        # NON pubblicare più nulla: il watchdog farà scattare l'allarme dopo 30s di silenzio
                         continue
 
                     # 2. SEMAFORI SANI (normali o in GIALLO_LAMPEGGIANTE) – pubblicazione invariata

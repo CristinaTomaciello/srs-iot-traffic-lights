@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import threading
 import time
 import uuid
 import re
@@ -8,6 +9,7 @@ import re
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 import redis
+import redis.exceptions
 from fastmcp import FastMCP
 import paho.mqtt.client as mqtt
 import influxdb_client
@@ -18,6 +20,7 @@ from simulator.utility.influx_utils import (
     INFLUX_ORG,
     log_audit,
 )
+from simulator.utility.mqtt_utils import connetti_con_failover
 
 mcp = FastMCP("EdgeRecoveryMCP")
 
@@ -28,47 +31,67 @@ REDIS_URLS = os.getenv(
     "redis://redis-lock-1:6379,redis://redis-lock-2:6379,redis://redis-lock-3:6379",
 ).split(",")
 
+current_redis_index = 0
 redis_client = None
 
-def connect_redis():
-    global redis_client
-    for url in REDIS_URLS:
-        url = url.strip()
+def get_redis_client():
+    global redis_client, current_redis_index
+    if redis_client:
+        try:
+            redis_client.ping()
+            return redis_client
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
+            redis_client = None
+
+    for _ in range(len(REDIS_URLS)):
+        url = REDIS_URLS[current_redis_index].strip()
         try:
             r = redis.Redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
             r.ping()
             redis_client = r
             print(f"[MCP_RECOVERY] ✅ Redis: {url}", file=sys.stderr, flush=True)
-            return True
-        except Exception as e:
-            print(f"[MCP_RECOVERY] ❌ Redis {url}: {e}", file=sys.stderr)
+            return redis_client
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
+            current_redis_index = (current_redis_index + 1) % len(REDIS_URLS)
+            
     print("[MCP_RECOVERY] ⚠️ No Redis. Lock/cache disabled.", file=sys.stderr)
-    return False
-
-connect_redis()
+    return None
 
 LOCK_TTL = 10
 CACHE_TTL = 30
 
 def acquire_lock(node_id: str) -> bool:
-    if not redis_client:
+    client = get_redis_client()
+    if not client:
         return True
     lock_key = f"lock:edge:{node_id}"
     owner = f"recovery_{uuid.uuid4().hex[:8]}"
-    return bool(redis_client.set(lock_key, owner, nx=True, ex=LOCK_TTL))
+    try:
+        return bool(client.set(lock_key, owner, nx=True, ex=LOCK_TTL))
+    except:
+        return True
 
 def cache_get(key: str):
-    if not redis_client:
+    client = get_redis_client()
+    if not client:
         return None
-    val = redis_client.get(f"cache:edge:{key}")
-    return val.decode() if val else None
+    try:
+        val = client.get(f"cache:edge:{key}")
+        return val.decode() if val else None
+    except:
+        return None
 
 def cache_set(key: str, value: str, ttl: int = CACHE_TTL):
-    if redis_client:
-        redis_client.setex(f"cache:edge:{key}", ttl, value)
+    client = get_redis_client()
+    if client:
+        try:
+            client.setex(f"cache:edge:{key}", ttl, value)
+        except:
+            pass
 
 # MQTT
 is_mqtt_connected = False
+server_id = f"MCP_RECOVERY_{uuid.uuid4().hex[:4]}_{os.getpid()}"
 
 def on_connect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
@@ -79,26 +102,30 @@ def on_connect(client, userdata, flags, rc, properties):
 def on_disconnect(client, userdata, flags, rc, properties):
     global is_mqtt_connected
     is_mqtt_connected = False
+    print("[MCP_RECOVERY] ⚠️ MQTT disconnesso! Avvio failover in background...", file=sys.stderr, flush=True)
+    
+    threading.Thread(target=connetti_con_failover, args=(
+        mqtt_client,
+        server_id,
+        lambda: is_mqtt_connected,
+        ["srs-haproxy-1", "srs-haproxy-2"]
+    )).start()
 
-server_id = f"MCP_RECOVERY_{uuid.uuid4().hex[:6]}"
-mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=server_id)
-mqtt_client.on_connect = on_connect
-mqtt_client.on_disconnect = on_disconnect
 
-def connetti_mqtt():
-    for broker in ["srs-haproxy-1", "srs-haproxy-2"]:
-        try:
-            mqtt_client.connect(broker, 1883, keepalive=5)
-            mqtt_client.loop_start()
-            return True
-        except Exception as e:
-            print(f"[MCP_RECOVERY] ❌ MQTT {broker}: {e}", file=sys.stderr)
-    return False
 
 def log_mcp(emoji: str, message: str):
     print(f"[{server_id}] {emoji} {message}", file=sys.stderr, flush=True)
 
-connetti_mqtt()
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=server_id)
+mqtt_client.on_connect = on_connect
+mqtt_client.on_disconnect = on_disconnect
+
+connetti_con_failover(
+    client=mqtt_client,
+    client_id=server_id,
+    check_connessione=lambda: is_mqtt_connected,
+    brokers=["srs-haproxy-1", "srs-haproxy-2"]
+)
 
 # ============================================================
 # TOOL 1: CONSOLIDATED VALIDATION (2 queries in 1 tool)
@@ -228,7 +255,8 @@ def execute_node_restart(node_id: str) -> str:
         return "SKIPPED: Another replica processing"
 
     if not is_mqtt_connected:
-        if not connetti_mqtt():
+        connetti_con_failover(mqtt_client, server_id, lambda: is_mqtt_connected, ["srs-haproxy-1", "srs-haproxy-2"])
+        if not is_mqtt_connected:
             return "ERROR: MQTT unavailable"
 
     try:
@@ -236,9 +264,9 @@ def execute_node_restart(node_id: str) -> str:
         mqtt_client.publish(topic, json.dumps({"type": "REPAIR"}), qos=1)
 
         point = influxdb_client.Point("agent_audit") \
-            .tag("node_id", node_id) \
-            .tag("mcp_instance", server_id) \
-            .field("action", "RESTART")
+        .tag("node_id", node_id) \
+        .tag("mcp_instance", server_id) \
+        .field("action", "RESTART")
 
         success = write_dual(point, synchronous=True)
 

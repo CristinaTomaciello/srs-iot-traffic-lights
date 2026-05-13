@@ -344,6 +344,19 @@
             </div>
             <button class="btn btn-pause" onclick="crashNode()" style="background: #c23616;">Crash 💥</button>
         </div>
+        <div class="admin-section" style="border-color: #44bcff;">
+            <h3 style="color: #44bcff;">Scenari Automatizzati</h3>
+            <div class="form-group">
+                <label>Seleziona Stress Test</label>
+                <select id="scenario-selector">
+                    <option value="tsunami">🌊 Tsunami Traffico</option>
+                    <option value="chaos">💥 Chaos Monkey (HW)</option>
+                    <option value="apocalypse">💀 Apocalisse Totale</option>
+                </select>
+            </div>
+            <button class="btn" onclick="runScenario()" style="background: #44bcff; color: white; transition: 0.2s;" onmouseover="this.style.background='#0097e6'" onmouseout="this.style.background='#44bcff'">AVVIA SCENARIO</button>
+            <div id="scenario-status" style="font-size: 12px; margin-top: 10px; color: #44bcff; text-align: center; font-weight: bold;"></div>
+        </div>
         </div>
     </div>
     

@@ -11,7 +11,7 @@ RUN mkdir -p simulator/utility && touch simulator/__init__.py simulator/utility/
 
 # Copia i file del server e le utility
 COPY mcp_servers/green_duration/mcp_green_duration.py .
-COPY simulator/utility/influx_utils.py ./simulator/utility/
+COPY simulator/utility/*.py ./simulator/utility/
 
 EXPOSE 8001
 
