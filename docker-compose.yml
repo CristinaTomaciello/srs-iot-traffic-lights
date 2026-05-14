@@ -16,7 +16,7 @@ services:
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=srs
+      - DOCKER_INFLUXDB_INIT_PASSWORD=passwordsrs123
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
@@ -34,7 +34,7 @@ services:
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=srs
+      - DOCKER_INFLUXDB_INIT_PASSWORD=passwordsrs123
       - DOCKER_INFLUXDB_INIT_ORG=srs_org
       - DOCKER_INFLUXDB_INIT_BUCKET=traffic_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=supersecrettoken123
