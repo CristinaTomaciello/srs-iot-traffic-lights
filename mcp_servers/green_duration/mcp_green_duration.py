@@ -126,10 +126,10 @@ def green_duration_check_lock(base_id: str) -> str:
         return cached
 
     try:
-        # 1. CHECK COOLDOWN (15s invece di 45s per maggiore reattività)
+        # 1. CHECK COOLDOWN (120s = durata massima ottimizzazione: 40s×3 cicli)
         res_hw = query_with_failover(f"""
             from(bucket: "{INFLUX_BUCKET}") 
-            |> range(start: -15s) 
+            |> range(start: -120s) 
             |> filter(fn: (r) => r["_measurement"] == "agent_audit")
             |> filter(fn: (r) => r["node_id"] =~ /{id_radice}/)
             |> filter(fn: (r) => r["_field"] == "action")
@@ -139,50 +139,73 @@ def green_duration_check_lock(base_id: str) -> str:
         
         if res_hw:
             val = f"LOCKED|reason=cooldown|cars=0|ts={int(time.time())}"
-            cache_set(cache_key, val, ttl=5)
+            cache_set(cache_key, val, ttl=60)
             return val
 
-        # 2. QUERY TRAFFICO MIGLIORATA
-        # - Range ridotto a 90s (dati freschi)
-        # - Filtro su ENTRAMBI i campi (incrocio E node_id)
-        # - Somma delle auto su TUTTE le direzioni
+        # 2. QUERY TRAFFICO CON VALIDAZIONE TEMPORALE STRETTA
+        # - Range 30s (solo dati FRESCHI)
+        # - Filtro su incrocio
+        # - Aggregazione per direzione
         query_traffico = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -90s) 
+          |> range(start: -30s)
           |> filter(fn: (r) => r["_measurement"] == "stato_traffico")
           |> filter(fn: (r) => r["incrocio"] == "{id_radice}" or r["node_id"] == "{id_radice}")
           |> filter(fn: (r) => r["_field"] == "auto_in_coda")
+          |> group(columns: ["direzione"])
           |> last()
+          |> group()
         """
         res_traffico = query_with_failover(query_traffico)
         
         if not res_traffico or len(res_traffico) == 0:
-            # NESSUN DATO RECENTE → Permetti ottimizzazione (approccio prudenziale)
-            val = f"UNLOCKED|reason=no_data|cars=0|ts={int(time.time())}"
-            cache_set(cache_key, val, ttl=3)
+            # Nessun dato recente (< 30s) = Incrocio inattivo o senza telemetria
+            val = f"LOCKED|reason=no_recent_data|cars=0|ts={int(time.time())}"
+            cache_set(cache_key, val, ttl=15)
+            log_mcp("⚠️", f"Nessun dato recente per {id_radice}", level="WARN")
             return val
 
-        # 3. CALCOLO TOTALE AUTO (somma su tutte le direzioni)
+        # 3. VALIDAZIONE FRESHNESS + CALCOLO TOTALE
+        now = time.time()
         total_cars = 0
         latest_ts = 0
+        valid_readings = 0
+        
         for table in res_traffico:
             for record in table.records:
+                rec_ts = int(record.get_time().timestamp())
+                age = now - rec_ts
+                
+                # CRITICO: Scarta letture più vecchie di 30 secondi
+                if age > 30:
+                    log_mcp("⏰", f"Dato stantio ignorato: {age:.1f}s fa", level="DEBUG")
+                    continue
+                
                 auto = int(record.values.get("_value", 0))
                 total_cars += auto
-                rec_ts = int(record.get_time().timestamp())
+                valid_readings += 1
+                
                 if rec_ts > latest_ts:
                     latest_ts = rec_ts
         
-        # 4. DECISIONE BASATA SU SOGLIA REALISTICA
-        if total_cars < 5:
+        # 4. VALIDAZIONE MINIMA COPERTURA
+        # Richiedi almeno 2 direzioni con dati freschi (su 4 possibili)
+        if valid_readings < 2:
+            val = f"LOCKED|reason=insufficient_data|cars={total_cars}|ts={latest_ts}"
+            cache_set(cache_key, val, ttl=10)
+            log_mcp("📊", f"Solo {valid_readings} direzioni con dati freschi", level="WARN")
+            return val
+        
+        # 5. DECISIONE BASATA SU SOGLIA (15 auto = threshold di allarme)
+        if total_cars < 15:
             val = f"LOCKED|reason=low_traffic|cars={total_cars}|ts={latest_ts}"
             cache_set(cache_key, val, ttl=8)
             return val
         
-        # UNLOCKED: C'è traffico sufficiente per ottimizzare
+        # UNLOCKED: C'è traffico sufficiente E dati freschi
         val = f"UNLOCKED|reason=traffic_detected|cars={total_cars}|ts={latest_ts}"
         cache_set(cache_key, val, ttl=3)
-        log_mcp("🟢", f"Check OK: {val}")
+        log_mcp("🟢", f"Check OK: {total_cars} auto, {valid_readings} direzioni valide")
         return val
 
     except Exception as e:
@@ -206,14 +229,47 @@ def green_duration_optimize_node(target_id: str, duration: int, cycles: int) -> 
     dir_specifica = match.group(2)
     asse = "NORD_SUD" if dir_specifica in ["NORD", "SUD"] else "EST_OVEST"
 
-    # Validazioni
+    # ===================================================================
+    # VALIDAZIONI RIGOROSE - BLOCCA ALLUCINAZIONI
+    # ===================================================================
+    
+    # 1. Lock concorrenza
     if not acquire_lock(f"optimize:{id_radice}"):
         return json.dumps({"status": "ERROR", "reason": "concurrent_operation", "target": target_id})
-    if not (1 <= cycles <= 4):
-        return json.dumps({"status": "ERROR", "reason": "invalid_cycles", "target": target_id})
+    
+    # 2. Validazione CICLI (max 3)
+    if not (1 <= cycles <= 3):
+        log_mcp("🚫", f"REJECTED: Cicli fuori range ({cycles}). Policy: 1-3 cicli", level="WARN")
+        return json.dumps({
+            "status": "ERROR", 
+            "reason": "invalid_cycles", 
+            "details": f"Requested {cycles} cycles, policy allows 1-3",
+            "target": target_id
+        })
+    
+    # 3. Validazione DURATA (15-40 secondi)
+    if duration < 15:
+        log_mcp("🚫", f"REJECTED: Durata troppo bassa ({duration}s). Policy: minimo 15s", level="WARN")
+        return json.dumps({
+            "status": "ERROR", 
+            "reason": "duration_too_low", 
+            "details": f"Requested {duration}s, policy requires minimum 15s",
+            "target": target_id
+        })
+    
     if duration > 40:
-        return json.dumps({"status": "ERROR", "reason": "duration_too_high", "target": target_id})
+        log_mcp("🚫", f"REJECTED: Durata troppo alta ({duration}s). Policy: massimo 40s", level="WARN")
+        return json.dumps({
+            "status": "ERROR", 
+            "reason": "duration_too_high", 
+            "details": f"Requested {duration}s, policy allows maximum 40s",
+            "target": target_id
+        })
 
+    # ===================================================================
+    # ESECUZIONE (solo se tutte le validazioni passano)
+    # ===================================================================
+    
     try:
         if not mqtt_client.is_connected():
             connetti_con_failover(mqtt_client, MIO_CLIENT_ID, 
