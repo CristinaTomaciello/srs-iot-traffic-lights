@@ -195,35 +195,40 @@ def validate_node_for_restart(node_id: str) -> str:
         # Query 2: Check restart history (prevent loops)
         query_restart = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -1h)
-          |> filter(fn: (r) => r["_measurement"] == "agent_audit")
-          |> filter(fn: (r) => r["node_id"] == "{node_id}")
-          |> filter(fn: (r) => r["_field"] == "action")
-          |> filter(fn: (r) => r["_value"] == "RESTART")
-          |> last()
+        |> range(start: -1h)
+        |> filter(fn: (r) => r["_measurement"] == "agent_audit")
+        |> filter(fn: (r) => r["node_id"] == "{node_id}")
+        |> filter(fn: (r) => r["_field"] == "action")
+        |> filter(fn: (r) => r["_value"] == "RESTART")
+        |> last()
         """
         result_restart = query_with_failover(query_restart)
 
-        if result_restart and len(result_restart) > 0:
-            restart_record = result_restart[0].records[0]
-            seconds_since_restart = int(time.time() - restart_record.get_time().timestamp())
+        seconds_since_restart = None  # <-- INIZIALIZZA QUI
 
-            if seconds_since_restart < 300:  # 5 min cooldown
-                response = json.dumps({
-                    "verdict": "BLOCKED",
-                    "reason": "Recent restart detected (loop prevention)",
-                    "telemetry": f"STALE ({seconds_ago}s ago)",
-                    "last_restart_seconds": seconds_since_restart
-                })
-                cache_set(f"validation:{node_id}", response, ttl=10)
-                return response
+        if result_restart:
+            try:
+                restart_record = result_restart[0].records[0]
+                seconds_since_restart = int(time.time() - restart_record.get_time().timestamp())
+                
+                if seconds_since_restart < 300:
+                    response = json.dumps({
+                        "verdict": "BLOCKED",
+                        "reason": "Recent restart detected (loop prevention)",
+                        "telemetry": f"STALE ({seconds_ago}s ago)",
+                        "last_restart_seconds": seconds_since_restart
+                    })
+                    cache_set(f"validation:{node_id}", response, ttl=10)
+                    return response
+            except (IndexError, AttributeError):
+                pass
 
         # All checks passed - approve restart
         response = json.dumps({
             "verdict": "APPROVED",
             "reason": "Stale data + no recent restart",
             "telemetry": f"STALE ({seconds_ago}s ago)",
-            "last_restart_seconds": 999999 if not result_restart else seconds_since_restart
+            "last_restart_seconds": seconds_since_restart if seconds_since_restart is not None else 999999
         })
         cache_set(f"validation:{node_id}", response, ttl=10)
         return response

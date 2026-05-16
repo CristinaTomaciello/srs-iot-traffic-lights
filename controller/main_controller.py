@@ -105,21 +105,24 @@ def on_message(client, userdata, msg):
         if auto_in_coda <= 15:
             traffic_alert_sent = False
         
+        if ero_gia_leader:
+            try:
+                punto_storico = influxdb_client.Point("stato_traffico") \
+                    .tag("incrocio", incrocio_id) \
+                    .tag("direzione", semaforo_id) \
+                    .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
+                    .field("colore", dati_semaforo.get('colore', 'UNKNOWN')) \
+                    .field("durata_verde", int(dati_semaforo.get('green_duration', 0)))
+                write_dual(punto_storico, synchronous=False)
+            except:
+                pass
+
         global_state[incrocio_id][semaforo_id] = {
             "dati": dati_semaforo,
             "last_seen": time.time(),
             "alert_sent": old_state.get("alert_sent", False),
-            "last_traffic_alert_time": old_state.get("last_traffic_alert_time", 0) 
+            "last_traffic_alert_time": old_state.get("last_traffic_alert_time", 0)
         }
-
-        if ero_gia_leader:
-            punto_storico = influxdb_client.Point("stato_traffico") \
-                .tag("incrocio", incrocio_id) \
-                .tag("direzione", semaforo_id) \
-                .field("auto_in_coda", int(dati_semaforo.get('auto_in_coda', 0))) \
-                .field("colore", dati_semaforo.get('colore', 'UNKNOWN')) \
-                .field("durata_verde", int(dati_semaforo.get('green_duration', 0)))
-            write_dual(punto_storico, synchronous=False)
         
     except json.JSONDecodeError: pass
     except Exception as e:
@@ -196,8 +199,10 @@ try:
                                 alert_payload = {"event": "NODE_SILENCE_TIMEOUT", "node_id": sem_id, "seconds_offline": int(secondi_silenzio)}
                                 client.publish("srs/alerts/recovery_needed", json.dumps(alert_payload), qos=1)
                                 info["alert_sent"] = True
-                                info["traffic_alert_sent"] = False 
-                            continue 
+                            continue
+                        else:
+                            if info.get("alert_sent", False):
+                                info["alert_sent"] = False
 
                         auto_attuali = int(info["dati"].get("auto_in_coda", 0))
                         if auto_attuali > 15:
