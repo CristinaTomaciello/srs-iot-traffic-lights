@@ -41,6 +41,62 @@ services:
     volumes:
       - ./influxdb_beta_data:/var/lib/influxdb2
     restart: unless-stopped
+  
+  haproxy-influx-1:
+    image: haproxy:2.8
+    container_name: srs-haproxy-influx-1
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy_influx.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8088:8086" 
+    depends_on:
+      - semafori-tsdb-alpha
+      - semafori-tsdb-beta
+    restart: unless-stopped
+
+  haproxy-influx-2:
+    image: haproxy:2.8
+    container_name: srs-haproxy-influx-2
+    networks:
+      - srs-net
+    volumes:
+      - ./haproxy_influx.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8089:8086"
+    depends_on:
+      - semafori-tsdb-alpha
+      - semafori-tsdb-beta
+    restart: unless-stopped
+  
+  telegraf-1:
+    image: telegraf:1.29
+    container_name: srs-telegraf-1
+    networks:
+      - srs-net
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - haproxy-1
+      - haproxy-2
+      - semafori-tsdb-alpha
+      - semafori-tsdb-beta
+    restart: unless-stopped
+
+  telegraf-2:
+    image: telegraf:1.29
+    container_name: srs-telegraf-2
+    networks:
+      - srs-net
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - haproxy-1
+      - haproxy-2
+      - semafori-tsdb-alpha
+      - semafori-tsdb-beta
+    restart: unless-stopped
 
   redis-lock-1:
     image: redis:alpine
