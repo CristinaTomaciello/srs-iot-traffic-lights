@@ -14,7 +14,7 @@ Abbiamo progettato un'infrastruttura distribuita ad **Alta Affidabilità (HA)** 
 
 Il sistema è stato ingegnerizzato seguendo un'architettura a microservizi divisa in 5 livelli logici, progettati per non avere alcun *Single Point of Failure* (SPOF).
 
-![livello_0_archittettura](img/livello_0_archittettura.png)
+![livello_0_archittettura](img/livello_0.png)
 
 1. **Livello Edge / Dispositivi:** I nodi semaforici fisici (qui implementati tramite un simulatore Python). Ogni nodo ha una logica di base autonoma: se perde la connessione o subisce un guasto, scala in sicurezza attivando il giallo lampeggiante (Graceful Degradation).
 2. **Livello di Comunicazione:** Un robusto cluster MQTT (EMQX) bilanciato da HAProxy. Garantisce la consegna dei messaggi (telemetria, heartbeat, comandi) anche in caso di caduta di uno dei broker.
