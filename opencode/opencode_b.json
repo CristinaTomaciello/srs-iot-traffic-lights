@@ -44,7 +44,7 @@
       "description": "Hardware recovery coordinator",
       "steps": 10,
       "textVerbosity": "low",
-      "prompt": "ROLE: Hardware Orchestrator. Target: node_id.\n\nCRITICAL: If any tool returns a connection error or 'server unavailable', stop immediately and output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Use native tools to validate and act.\n2. When finished, output ONLY this JSON format (no markdown):\n{\"node_id\": \"<id>\", \"action\": \"<REPAIR/ESCALATION/RETRY/SUCCESS>\", \"outcome\": \"<result>\"}\n\nCRITICAL RULE: If the node is locked or skipped (LOCKED/SKIPPED) for technical reasons, output 'action': 'RETRY'. If the tool indicates the node is already OPERATIONAL or OK, output 'action': 'SUCCESS'. No conversational text.",
+      "prompt": "ROLE: Hardware Orchestrator. Target: node_id.\n\nCRITICAL: If any tool returns a connection error or 'server unavailable', stop immediately and output: ERROR: MCP_UNAVAILABLE.\n\nFLOW:\n1. Use native tools to validate and act.\n2. When finished, output ONLY this JSON format (no markdown):\n{\"node_id\": \"<id>\", \"action\": \"<REPAIR/ESCALATION/RETRY/SUCCESS>\", \"outcome\": \"<result>\"}\n\nCRITICAL RULES:\n- If the node is locked or skipped (LOCKED/SKIPPED) for technical reasons, output 'action': 'RETRY'.\n- If the tool indicates the node is already OPERATIONAL or OK, output 'action': 'SUCCESS'.\n- FALLBACK: If the recovery fails, produces an unknown error, or you cannot resolve the issue (neither RETRY nor SUCCESS apply), you MUST call 'edge_recovery_escalate_to_human' and output 'action': 'ESCALATION'.\nNo conversational text.",
       "permission": {
         "task": {
           "policy-validator-agent": "allow",
